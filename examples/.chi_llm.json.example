@@ -1,0 +1,6 @@
+{
+  "default_model": "qwen2-1.5b",
+  "preferred_context": 8192,
+  "preferred_max_tokens": 2048,
+  "downloaded_models": ["gemma-270m", "qwen2-1.5b"]
+}

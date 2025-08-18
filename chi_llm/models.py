@@ -8,6 +8,9 @@ from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Model directory
 MODEL_DIR = Path.home() / '.cache' / 'chi_llm'
@@ -155,30 +158,114 @@ MODELS = {
 
 
 class ModelManager:
-    """Manages model downloads and switching."""
+    """Manages model downloads and switching.
     
-    def __init__(self):
-        self.config_file = MODEL_DIR / "model_config.json"
+    Configuration priority (highest to lowest):
+    1. Environment variables (CHI_LLM_MODEL, CHI_LLM_CONFIG)
+    2. Local project config (.chi_llm.json in current directory)
+    3. User project config (traverse up to find .chi_llm.json)
+    4. Global user config (~/.cache/chi_llm/model_config.json)
+    5. Default configuration
+    """
+    
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_paths = self._get_config_paths(config_path)
+        self.config_file = self.config_paths['global']  # For saving
         self.load_config()
     
-    def load_config(self):
-        """Load model configuration."""
-        if self.config_file.exists():
-            with open(self.config_file, 'r') as f:
-                self.config = json.load(f)
-        else:
-            self.config = {
-                "default_model": "gemma-270m",
-                "downloaded_models": [],
-                "preferred_context": 8192,
-                "preferred_max_tokens": 4096
-            }
+    def _get_config_paths(self, custom_path: Optional[str] = None) -> Dict[str, Path]:
+        """Get all possible config paths in priority order."""
+        paths = {}
+        
+        # 1. Custom path if provided
+        if custom_path:
+            paths['custom'] = Path(custom_path)
+        
+        # 2. Environment variable
+        if 'CHI_LLM_CONFIG' in os.environ:
+            paths['env'] = Path(os.environ['CHI_LLM_CONFIG'])
+        
+        # 3. Local project config (current directory)
+        local_config = Path.cwd() / '.chi_llm.json'
+        if local_config.exists():
+            paths['local'] = local_config
+        
+        # 4. Project config (traverse up to find)
+        current = Path.cwd()
+        while current != current.parent:
+            project_config = current / '.chi_llm.json'
+            if project_config.exists():
+                paths['project'] = project_config
+                break
+            current = current.parent
+        
+        # 5. Global user config
+        paths['global'] = MODEL_DIR / "model_config.json"
+        
+        return paths
     
-    def save_config(self):
-        """Save model configuration."""
-        MODEL_DIR.mkdir(parents=True, exist_ok=True)
-        with open(self.config_file, 'w') as f:
+    def load_config(self):
+        """Load model configuration from multiple sources."""
+        # Start with defaults
+        self.config = {
+            "default_model": "gemma-270m",
+            "downloaded_models": [],
+            "preferred_context": 8192,
+            "preferred_max_tokens": 4096
+        }
+        
+        # Load configs in reverse priority (so higher priority overwrites)
+        config_sources = ['global', 'project', 'local', 'env', 'custom']
+        
+        for source in config_sources:
+            if source in self.config_paths:
+                config_path = self.config_paths[source]
+                if config_path.exists():
+                    try:
+                        with open(config_path, 'r') as f:
+                            loaded = json.load(f)
+                            # Merge configurations
+                            self.config.update(loaded)
+                            logger.debug(f"Loaded config from {source}: {config_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load config from {config_path}: {e}")
+        
+        # Environment variable overrides for specific settings
+        if 'CHI_LLM_MODEL' in os.environ:
+            model_id = os.environ['CHI_LLM_MODEL']
+            if model_id in MODELS:
+                self.config['default_model'] = model_id
+                logger.debug(f"Using model from env: {model_id}")
+        
+        if 'CHI_LLM_CONTEXT' in os.environ:
+            try:
+                self.config['preferred_context'] = int(os.environ['CHI_LLM_CONTEXT'])
+            except ValueError:
+                pass
+        
+        if 'CHI_LLM_MAX_TOKENS' in os.environ:
+            try:
+                self.config['preferred_max_tokens'] = int(os.environ['CHI_LLM_MAX_TOKENS'])
+            except ValueError:
+                pass
+    
+    def save_config(self, target: str = 'global'):
+        """Save model configuration.
+        
+        Args:
+            target: Where to save - 'global', 'local', or specific path
+        """
+        if target == 'local':
+            save_path = Path.cwd() / '.chi_llm.json'
+        elif target == 'global':
+            save_path = self.config_file
+            MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        else:
+            save_path = Path(target)
+        
+        with open(save_path, 'w') as f:
             json.dump(self.config, f, indent=2)
+        logger.info(f"Saved config to {save_path}")
     
     def get_current_model(self) -> ModelInfo:
         """Get currently selected model."""
@@ -217,13 +304,18 @@ class ModelManager:
         model = MODELS[model_id]
         return MODEL_DIR / model.filename
     
-    def set_default_model(self, model_id: str):
-        """Set default model."""
+    def set_default_model(self, model_id: str, save_target: str = 'global'):
+        """Set default model.
+        
+        Args:
+            model_id: Model ID to set as default
+            save_target: Where to save - 'global', 'local', or path
+        """
         if model_id not in MODELS:
             raise ValueError(f"Unknown model: {model_id}")
         
         self.config["default_model"] = model_id
-        self.save_config()
+        self.save_config(save_target)
     
     def mark_downloaded(self, model_id: str):
         """Mark model as downloaded."""
@@ -264,12 +356,20 @@ class ModelManager:
     
     def get_model_stats(self) -> Dict:
         """Get statistics about models."""
+        config_source = 'default'
+        for source in ['custom', 'env', 'local', 'project', 'global']:
+            if source in self.config_paths and self.config_paths[source].exists():
+                config_source = source
+                break
+        
         return {
             "total_models": len(MODELS),
             "downloaded": len([m for m in MODELS if self.is_downloaded(m)]),
             "current_model": self.config["default_model"],
             "available_ram_gb": self._get_available_ram(),
-            "recommended_model": self.recommend_model().id
+            "recommended_model": self.recommend_model().id,
+            "config_source": config_source,
+            "config_path": str(self.config_paths.get(config_source, 'built-in'))
         }
 
 

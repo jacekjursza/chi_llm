@@ -287,24 +287,57 @@ llm = MicroLLM(
 )
 ```
 
-### Configuration File
+### Configuration Hierarchy
 
-Create a `.chi_llm.yaml` file in your project root:
+chi_llm looks for configuration in this order (highest priority first):
 
-```yaml
-model:
-  temperature: 0.7
-  max_tokens: 4096
-  top_p: 0.95
-  top_k: 40
-verbose: false
-```
+1. **Environment Variables**
+   ```bash
+   export CHI_LLM_MODEL=phi3-mini        # Override default model
+   export CHI_LLM_CONFIG=/path/to/config # Custom config path
+   export CHI_LLM_CONTEXT=16384          # Context window size
+   export CHI_LLM_MAX_TOKENS=2048        # Max response tokens
+   ```
 
-### Environment Variables
+2. **Local Project Config** (`.chi_llm.json` in current directory)
+   ```json
+   {
+     "default_model": "qwen2-1.5b",
+     "preferred_context": 8192,
+     "preferred_max_tokens": 2048
+   }
+   ```
+
+3. **Parent Project Config** (searches up directories for `.chi_llm.json`)
+   - Useful for monorepos or nested projects
+
+4. **Global User Config** (`~/.cache/chi_llm/model_config.json`)
+   - Set via `chi-llm models set <model-id>`
+   - Or `chi-llm setup`
+
+5. **Built-in Defaults**
+   - Model: gemma-270m (ultra-lightweight)
+   - Context: 8192 tokens
+   - Max tokens: 4096
+
+### Managing Configuration
 
 ```bash
-export CHI_LLM_CONFIG=/path/to/config.yaml
+# Set model globally (for all projects)
+chi-llm models set phi3-mini
+
+# Set model locally (for current project only)
+chi-llm models set phi3-mini --local
+
+# Check current configuration source
+chi-llm models current
 ```
+
+This allows you to:
+- Have different models per project
+- Override settings via environment variables in CI/CD
+- Share team settings via committed `.chi_llm.json`
+- Keep personal preferences in global config
 
 ## 🧠 Available Models
 

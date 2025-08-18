@@ -378,7 +378,10 @@ def cmd_models(args):
     elif args.models_command == 'current':
         # Show current model
         current = manager.get_current_model()
+        stats = manager.get_model_stats()
         print(format_model_info(current, True, True))
+        print(f"\n📁 Config source: {stats['config_source']}")  
+        print(f"   Path: {stats['config_path']}")
     
     elif args.models_command == 'set':
         # Set default model
@@ -392,9 +395,12 @@ def cmd_models(args):
             print("Run 'chi-llm setup' to download it first.")
             return
         
-        manager.set_default_model(args.model_id)
+        # Check for --local flag
+        save_target = 'local' if hasattr(args, 'local') and args.local else 'global'
+        manager.set_default_model(args.model_id, save_target=save_target)
         model = MODELS[args.model_id]
-        print(f"✅ {model.name} is now the default model!")
+        location = "locally" if save_target == 'local' else "globally"
+        print(f"✅ {model.name} is now the default model {location}!")
     
     elif args.models_command == 'info':
         # Show model info
@@ -633,6 +639,7 @@ def main():
         # Models set
         models_set = models_sub.add_parser('set', help='Set default model')
         models_set.add_argument('model_id', help='Model ID (e.g., phi3-mini, qwen2-1.5b)')
+        models_set.add_argument('--local', action='store_true', help='Save to local project config')
         
         # Models info
         models_info = models_sub.add_parser('info', help='Show model details')

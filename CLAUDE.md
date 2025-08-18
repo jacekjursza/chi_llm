@@ -4,72 +4,187 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a code analyzer tool that uses Google's Gemma 3 270M model (local LLM) to analyze code files. It runs completely offline after initial model download and provides AI-powered code analysis without requiring API keys.
+chi_llm is a zero-configuration micro-LLM library for Python. It provides instant AI capabilities with no API keys, no cloud dependencies, and automatic model management. The library supports multiple small language models (270M to 9B parameters) and includes features like RAG, prompt templates, and flexible configuration management.
 
 ## Common Commands
 
-### Running the Analyzer
+### CLI Usage
 ```bash
-# Basic usage
-python main.py <file_path>
+# Interactive setup (choose and download models)
+chi-llm setup
 
-# With custom question
-python main.py <file_path> -q "Your specific question about the code"
+# Generate text
+chi-llm generate "Your prompt here"
 
-# Force CPU mode
-python main.py <file_path> --no-gpu
+# Interactive chat
+chi-llm chat
+
+# Analyze code
+chi-llm analyze file.py -q "What does this do?"
+
+# Model management
+chi-llm models list              # List all available models
+chi-llm models current           # Show current model and config source
+chi-llm models set phi3-mini     # Set default model globally
+chi-llm models set phi3-mini --local  # Set for current project only
+
+# RAG operations
+chi-llm rag query "question" --documents doc1.txt doc2.txt
+chi-llm rag add doc.txt --db knowledge.db
+```
+
+### Python API
+```python
+from chi_llm import MicroLLM, quick_llm
+
+# Zero configuration
+llm = MicroLLM()
+response = llm.generate("Hello!")
+
+# Quick one-liner
+print(quick_llm("Write a haiku"))
+
+# With specific model
+llm = MicroLLM(model_id="phi3-mini")
+
+# RAG usage
+from chi_llm.rag import quick_rag
+answer = quick_rag("question", ["doc1", "doc2"])
 ```
 
 ### Installation & Setup
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Basic installation
+pip install git+https://github.com/jacekjursza/chi_llm.git
 
-# Install as system-wide command (optional)
-pip install .
+# With RAG support
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[rag]"
 
-# Add GPU support (optional)
-pip install torch
+# Full installation
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[full]"
+
+# Development
+pip install -e ".[dev]"
 ```
 
-### Development Tasks
+### Testing
 ```bash
-# Run tests (when available)
-python -m pytest test_example.py
+# Run all tests
+python -m pytest tests/ -v
 
-# Install development dependencies
-pip install -e ".[dev]"
+# Run specific test file
+python -m pytest tests/test_core.py -v
+
+# With coverage
+python -m pytest tests/ --cov=chi_llm --cov-report=html
 ```
 
 ## Architecture & Key Components
 
-### Core Module: `main.py`
-- **Entry point**: CLI interface for code analysis
-- **Model management**: Downloads and caches Gemma 3 270M model (~200MB) in `~/.cache/gemma_analyzer/`
-- **Key functions**:
-  - `download_model()`: Handles one-time model download from HuggingFace
-  - `load_model()`: Initializes Llama.cpp with optimized settings
-  - `analyze_code()`: Generates AI analysis using specific prompt format
-  - `read_file()`: Handles file reading with size limits (100KB warning, 20K char truncation for analysis)
+### Core Module: `chi_llm/core.py`
+- **MicroLLM class**: Main interface for all LLM operations
+- **Singleton pattern**: Model loaded once, reused across instances
+- **Model management**: Auto-downloads models from HuggingFace
+- **Key methods**:
+  - `generate()`: Text generation with prompts
+  - `chat()`: Conversational interface with history
+  - `complete()`: Text completion
+  - `ask()`: Question answering with optional context
+  - `analyze()`: Code analysis (backward compatibility)
+  - `extract()`: Structured data extraction
+  - `summarize()`: Text summarization
+  - `translate()`: Language translation
+  - `classify()`: Text classification
 
-### Model Configuration
-- Uses GGUF quantized format (Q4_K_M) for optimal size/quality
-- Context window: 8192 tokens (reduced from 32K for stability)
-- Inference engine: llama-cpp-python
-- Temperature: 0.3 (low for accurate analysis)
+### Model Management: `chi_llm/models.py`
+- **ModelInfo dataclass**: Model metadata (size, RAM, context, etc.)
+- **MODELS registry**: 9 curated models from 270M to 9B
+- **ModelManager class**: Handles downloads, switching, configuration
+- **Configuration hierarchy**:
+  1. Environment variables (CHI_LLM_MODEL, etc.)
+  2. Local project config (.chi_llm.json)
+  3. Parent project config (searches up directories)
+  4. Global user config (~/.cache/chi_llm/model_config.json)
+  5. Built-in defaults (gemma-270m)
 
-### Prompt Format
-The model expects Gemma-specific chat format:
+### CLI: `chi_llm/cli.py`
+- **500+ lines**: Comprehensive command-line interface
+- **Commands**: generate, chat, complete, ask, analyze, extract, summarize, translate, classify, template, rag, setup, models, interactive
+- **Model management**: List, switch, info commands
+- **RAG integration**: Query, add, search operations
+
+### Setup Wizard: `chi_llm/setup.py`
+- **Interactive setup**: User-friendly model selection
+- **System detection**: RAM-based recommendations
+- **Download management**: HuggingFace integration
+- **Quick & advanced modes**: Different user expertise levels
+
+### RAG Module: `chi_llm/rag.py` (optional)
+- **MicroRAG class**: Vector-based document retrieval
+- **SQLite-vec backend**: Local vector storage
+- **Embeddings**: sentence-transformers models
+- **YAML config**: Configuration file support
+
+### Prompt Templates: `chi_llm/prompts.py`
+- **Pre-built templates**: Code review, SQL generation, etc.
+- **Customizable**: Easy to extend with new templates
+
+## Model Configuration
+
+### Default Model
+- **gemma-270m**: Ultra-lightweight (200MB), works everywhere
+- **Context**: 32,768 tokens (full capacity)
+- **Max tokens**: 4,096 (default response length)
+
+### Available Models
+- **Tiny (270M)**: gemma-270m - Fast, minimal RAM
+- **Small (1-2B)**: qwen2-1.5b, stablelm-2-1.6b
+- **Medium (2-3B)**: gemma2-2b, phi2-2.7b, stablelm-3b
+- **Large (3-9B)**: phi3-mini, qwen2.5-3b, gemma2-9b
+
+### Model Storage
+- **Location**: `~/.cache/chi_llm/`
+- **Format**: GGUF quantized (4-bit or 2-bit)
+- **Auto-download**: First use triggers download
+
+## Configuration Management
+
+### File Locations
+- **Global**: `~/.cache/chi_llm/model_config.json`
+- **Project**: `.chi_llm.json` (current or parent directories)
+- **Custom**: Via CHI_LLM_CONFIG environment variable
+
+### Configuration Schema
+```json
+{
+  "default_model": "model_id",
+  "downloaded_models": ["list", "of", "models"],
+  "preferred_context": 8192,
+  "preferred_max_tokens": 4096
+}
 ```
-<start_of_turn>user
-[content]
-<end_of_turn>
-<start_of_turn>model
-```
+
+### Environment Variables
+- `CHI_LLM_MODEL`: Override default model
+- `CHI_LLM_CONFIG`: Custom config path
+- `CHI_LLM_CONTEXT`: Context window size
+- `CHI_LLM_MAX_TOKENS`: Max response tokens
 
 ## Important Notes
 
-- Model is downloaded from HuggingFace on first run
-- GPU detection is currently disabled in code (`check_gpu_available()` returns False)
-- File size limits: 100KB for reading, 20K characters for analysis
-- The tool uses llama.cpp warnings suppression for cleaner output
+- **Zero configuration**: Works out of the box with defaults
+- **100% local**: No API keys, no cloud dependencies
+- **Auto-caching**: Models downloaded once, reused forever
+- **CPU-friendly**: All models work on CPU (GPU optional)
+- **Context limits**: Respect model-specific context windows
+- **Prompt format**: Uses Gemma-style chat format
+- **Singleton pattern**: Model loaded once per process
+- **Thread-safe**: Uses locks for model loading
+
+## Testing Guidelines
+
+- **Use smallest model**: gemma-270m for fast tests
+- **Mock model loading**: Use fixtures in tests/
+- **Check all methods**: Core has 10+ public methods
+- **Test configuration**: Verify hierarchy works
+- **CLI testing**: Test all subcommands

@@ -55,6 +55,8 @@ Welcome to chi_llm! Let's set up the perfect model for your system.
         print(f"   Models available: {stats['total_models']}")
         print(f"   Models downloaded: {stats['downloaded']}")
         print(f"   Current model: {stats['current_model']}")
+        if stats['config_source'] != 'default':
+            print(f"   Config source: {stats['config_source']} ({stats['config_path']})")
         print()
     
     def show_model_recommendations(self):
