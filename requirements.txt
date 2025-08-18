@@ -1,0 +1,6 @@
+# Core dependencies
+llama-cpp-python>=0.2.0
+huggingface-hub>=0.20.0
+
+# Optional: For GPU detection (uncomment if you want GPU support)
+# torch>=2.0.0
