@@ -15,18 +15,19 @@ else:
 
 setup(
     name="chi-llm",
-    version="1.0.0",
+    version="2.0.0",
     author="Jacek Jursza",
-    description="AI-powered code analysis using Gemma 3 270M local LLM",
+    description="Zero Configuration Micro-LLM Library - The simplest way to add AI to your Python project",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jacekjursza/chi_llm",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Software Development :: Code Generators",
-        "Topic :: Software Development :: Documentation",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
@@ -43,6 +44,7 @@ setup(
     install_requires=[
         "llama-cpp-python>=0.2.0",
         "huggingface-hub>=0.20.0",
+        "pyyaml>=6.0",  # For config file support
     ],
     extras_require={
         "gpu": [
@@ -63,8 +65,10 @@ setup(
     },
     include_package_data=True,
     zip_safe=False,
+    keywords="llm ai ml nlp gemma local-llm zero-config micro-llm text-generation",
     project_urls={
         "Bug Reports": "https://github.com/jacekjursza/chi_llm/issues",
         "Source": "https://github.com/jacekjursza/chi_llm",
+        "Documentation": "https://github.com/jacekjursza/chi_llm#readme",
     },
 )

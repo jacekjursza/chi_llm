@@ -1,251 +1,305 @@
-# Code Analyzer - Gemma 3 270M
+# chi_llm - Zero Configuration Micro-LLM Library
 
-🔍 AI-powered code analysis tool using Google's Gemma 3 270M model. Analyze, understand, and get insights about your code files instantly.
+🚀 **The simplest way to add AI to your Python project**  
+No API keys. No cloud dependencies. No complex setup. Just import and use.
 
-## Features
+```python
+from chi_llm import MicroLLM
 
-- 🚀 **Ultra-fast analysis** using compact 270M parameter model
-- 💻 **Cross-platform** support (Windows, Linux, macOS)
-- 🎯 **GPU & CPU support** - automatically detects and uses available hardware
-- 📦 **No API keys required** - runs completely offline
-- 🔒 **Privacy-first** - your code never leaves your machine
-- 📏 **32K context window** - analyze large code files
+llm = MicroLLM()
+response = llm.generate("Hello, how are you?")
+print(response)
+```
+
+## Why chi_llm?
+
+- **🔌 Zero Configuration** - Works out of the box, no setup required
+- **🏠 100% Local** - Your data never leaves your machine
+- **🎯 Simple API** - One import, intuitive methods
+- **⚡ Lightweight** - 270M parameter model, runs on any hardware
+- **🔒 Private** - No API keys, no telemetry, no tracking
+- **📦 Self-Contained** - Automatically downloads and manages models
 
 ## Installation
 
-### Quick Install
-
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/code-analyzer-gemma.git
-cd code-analyzer-gemma
-
-# Install dependencies
-pip install -r requirements.txt
+pip install chi-llm
 ```
 
-### Install with GPU Support
+Or install from GitHub:
 
 ```bash
-# For GPU acceleration (optional)
-pip install -r requirements.txt
-pip install torch  # Adds GPU detection capability
+pip install git+https://github.com/jacekjursza/chi_llm.git
 ```
 
-### System-wide Installation
+## Quick Start
 
-```bash
-# Install as a command-line tool
-pip install .
+### The Simplest Example
 
-# Now you can use it from anywhere:
-code-analyzer /path/to/file.py
+```python
+from chi_llm import quick_llm
+
+print(quick_llm("Write a haiku about Python"))
 ```
-
-## Usage
 
 ### Basic Usage
 
-```bash
-# Analyze a Python file
-python main.py script.py
+```python
+from chi_llm import MicroLLM
 
-# Analyze a JavaScript file
-python main.py app.js
+# Initialize (one-time model download happens here)
+llm = MicroLLM()
 
-# Analyze any code file
-python main.py /path/to/code.cpp
+# Generate text
+response = llm.generate("Explain quantum computing in simple terms")
+print(response)
+
+# Have a conversation
+response = llm.chat("What's the weather like?")
+print(response)
+
+# Complete text
+response = llm.complete("The quick brown fox")
+print(response)
+
+# Ask questions
+response = llm.ask("What is the capital of France?")
+print(response)
 ```
 
-### Custom Questions
+## Common Use Cases
 
-```bash
-# Ask specific questions about the code
-python main.py main.py -q "What design patterns are used here?"
-python main.py script.js -q "Find potential security issues"
-python main.py app.cpp -q "Suggest performance optimizations"
-python main.py func.py -q "Write unit tests for this function"
+### 💬 Chatbot
+
+```python
+from chi_llm import MicroLLM
+
+llm = MicroLLM()
+history = []
+
+while True:
+    user_input = input("You: ")
+    if user_input.lower() == 'quit':
+        break
+    
+    response = llm.chat(user_input, history=history)
+    print(f"AI: {response}")
+    
+    history.append({"user": user_input, "assistant": response})
 ```
 
-### Force CPU Mode
+### 📝 Text Generation
 
-```bash
-# Disable GPU even if available
-python main.py file.py --no-gpu
+```python
+# Creative writing
+story = llm.generate("Write a short story about a robot learning to paint")
+
+# Email drafting
+email = llm.generate("Write a professional email declining a meeting invitation")
+
+# Product descriptions
+description = llm.generate("Write a product description for wireless headphones")
 ```
 
-## Examples
+### 🔍 Data Extraction
 
-### Example 1: Analyze a Python Function
-
-```bash
-$ python main.py fibonacci.py
-🔍 Code Analyzer powered by Gemma 3 270M
-============================================================
-📄 Analyzing: fibonacci.py
-📏 File size: 245 characters
-🤖 Loading AI model...
-   Using CPU mode
-✅ Model ready!
-
-🔎 Analyzing code...
-❓ Question: Describe what this code does and explain its main functionality.
-
-------------------------------------------------------------
-
-💡 Analysis Result:
-------------------------------------------------------------
-This code implements a Fibonacci sequence generator. The function calculates 
-the nth Fibonacci number using recursion. It includes a base case for n <= 1 
-and recursively calls itself to compute the sum of the two preceding numbers.
-
-Key aspects:
-- Time complexity: O(2^n) due to recursive calls
-- Space complexity: O(n) for the call stack
-- Could be optimized using memoization or iterative approach
-------------------------------------------------------------
-
-✨ Analysis complete!
+```python
+# Extract structured data
+text = "John Doe is 30 years old and works as a software engineer in New York."
+json_data = llm.extract(text, format="json")
+print(json_data)
+# Output: {"name": "John Doe", "age": 30, "occupation": "software engineer", "location": "New York"}
 ```
 
-### Example 2: Find Bugs
+### 📊 Text Analysis
 
-```bash
-$ python main.py buggy_code.js -q "Find potential bugs and issues"
+```python
+# Summarization
+long_article = "..." # Your long text here
+summary = llm.summarize(long_article, max_sentences=3)
+
+# Classification
+sentiment = llm.classify(
+    "I absolutely love this product! Best purchase ever!",
+    categories=["positive", "negative", "neutral"]
+)
+print(sentiment)  # Output: "positive"
+
+# Translation
+translated = llm.translate("Bonjour le monde", target_language="English")
+print(translated)  # Output: "Hello world"
 ```
 
-### Example 3: Code Review
+### 💻 Code Analysis
 
-```bash
-$ python main.py pull_request.py -q "Perform a code review and suggest improvements"
+```python
+code = """
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+"""
+
+# Analyze code
+explanation = llm.analyze(code)
+print(explanation)
+
+# Ask specific questions
+complexity = llm.ask("What is the time complexity?", context=code)
+print(complexity)
 ```
 
-## System Requirements
+### 📋 Using Prompt Templates
 
-### Minimum Requirements
-- Python 3.8+
-- 4GB RAM
-- 1GB free disk space (for model storage)
+```python
+from chi_llm import MicroLLM, PromptTemplates
 
-### Recommended
-- Python 3.10+
-- 8GB+ RAM
-- NVIDIA GPU with 4GB+ VRAM (optional, for faster processing)
-- SSD storage
+llm = MicroLLM()
+templates = PromptTemplates()
+
+# Code review
+code = "def add(a, b): return a + b"
+review_prompt = templates.code_review(code, language="Python")
+review = llm.generate(review_prompt)
+
+# Generate SQL from description
+sql_prompt = templates.sql_from_description("Get all users who signed up last month")
+sql = llm.generate(sql_prompt)
+
+# Create user story
+story_prompt = templates.user_story("dark mode toggle feature")
+user_story = llm.generate(story_prompt)
+```
+
+## Advanced Features
+
+### Configuration Options
+
+```python
+# Custom configuration
+llm = MicroLLM(
+    temperature=0.3,  # Lower = more focused, Higher = more creative
+    max_tokens=1024,  # Maximum response length
+    verbose=True      # Show loading progress
+)
+```
+
+### Configuration File
+
+Create a `.chi_llm.yaml` file in your project root:
+
+```yaml
+model:
+  temperature: 0.7
+  max_tokens: 2048
+  top_p: 0.95
+  top_k: 40
+verbose: false
+```
+
+### Environment Variables
+
+```bash
+export CHI_LLM_CONFIG=/path/to/config.yaml
+```
 
 ## Model Information
 
-- **Model**: Gemma 3 270M Instruction-Tuned
-- **Size**: ~200MB (quantized GGUF format)
+chi_llm uses Google's **Gemma 3 270M** model:
+
+- **Size**: ~200MB (downloads automatically on first use)
 - **Parameters**: 270 million
-- **Context**: 32,768 tokens
-- **Format**: Q4_K_M quantization (optimal quality/size ratio)
+- **Quantization**: 4-bit (Q4_K_M)
+- **Context**: 8,192 tokens
+- **Requirements**: 4GB RAM minimum
 
-## First Run
+The model is cached locally in `~/.cache/chi_llm/` and only downloads once.
 
-On first run, the tool will automatically download the model (~200MB). The model is cached in:
-- Linux/Mac: `~/.cache/gemma_analyzer/`
-- Windows: `%USERPROFILE%\.cache\gemma_analyzer\`
+## API Reference
 
-## Supported File Types
-
-The analyzer works with any text-based code file:
-- Python (.py)
-- JavaScript/TypeScript (.js, .ts, .jsx, .tsx)
-- C/C++ (.c, .cpp, .h, .hpp)
-- Java (.java)
-- Go (.go)
-- Rust (.rs)
-- Ruby (.rb)
-- PHP (.php)
-- Shell scripts (.sh, .bash)
-- And many more...
-
-## Advanced Usage
-
-### Integration with IDEs
+### MicroLLM Class
 
 ```python
-from main import load_model, analyze_code
-
-# Load model once
-model_path = "~/.cache/gemma_analyzer/gemma-3-270m-it-Q4_K_M.gguf"
-llm = load_model(model_path)
-
-# Analyze multiple files
-code = open("myfile.py").read()
-result = analyze_code(llm, code, "myfile.py", "Explain this code")
-print(result)
+llm = MicroLLM(temperature=0.7, max_tokens=2048, verbose=False)
 ```
 
-### Batch Processing
+**Methods:**
+- `generate(prompt, **kwargs)` - Generate text from a prompt
+- `chat(message, history=None)` - Chat with context
+- `complete(text, **kwargs)` - Complete/continue text
+- `ask(question, context=None)` - Question answering
+- `analyze(code, question=None)` - Analyze code
+- `extract(text, format="json", schema=None)` - Extract structured data
+- `summarize(text, max_sentences=3)` - Summarize text
+- `translate(text, target_language="English")` - Translate text
+- `classify(text, categories)` - Classify into categories
 
-```bash
-# Analyze all Python files in a directory
-for file in *.py; do
-    echo "Analyzing $file..."
-    python main.py "$file" -q "Find code smells" > "reviews/${file%.py}_review.txt"
-done
-```
+### Quick Functions
 
-## Troubleshooting
+```python
+from chi_llm import quick_llm
 
-### Issue: Model download fails
-**Solution**: Check internet connection and try again. The model is downloaded from HuggingFace.
-
-### Issue: Out of memory error
-**Solution**: Use `--no-gpu` flag to run in CPU mode, which uses less memory.
-
-### Issue: Slow performance
-**Solution**: 
-1. Ensure you have llama-cpp-python compiled with acceleration
-2. Consider using GPU mode (install torch)
-3. Reduce context size in the code if needed
-
-### Issue: Import errors on Windows
-**Solution**: Install Visual C++ Redistributable:
-```bash
-# Install with conda (recommended for Windows)
-conda install -c conda-forge llama-cpp-python
+# One-liner generation
+result = quick_llm("Your prompt here")
 ```
 
 ## Performance Tips
 
-1. **GPU Acceleration**: Install PyTorch for automatic GPU detection
-2. **CPU Optimization**: The tool automatically uses all available CPU cores
-3. **Memory Usage**: The model uses ~1-2GB RAM in normal operation
-4. **First Run**: Initial model download happens only once
+1. **Reuse instances** - Create one `MicroLLM` instance and reuse it
+2. **Batch processing** - Process multiple items with the same instance
+3. **Lower temperature** - Use `temperature=0.1` for factual tasks
+4. **Adjust max_tokens** - Lower values for faster responses
 
-## Privacy & Security
+## Troubleshooting
 
-- ✅ **100% Offline**: No internet connection required after model download
-- ✅ **No Telemetry**: No data is sent anywhere
-- ✅ **Local Processing**: All analysis happens on your machine
-- ✅ **Open Source**: Fully auditable code
+### First Run
+The model downloads automatically on first use (~200MB). This only happens once.
+
+### Memory Issues
+- Requires ~4GB RAM
+- Close other applications if needed
+- Use shorter prompts/contexts
+
+### Slow Performance
+- Normal on CPU: ~10-30 seconds per response
+- Model loads once and stays in memory
+- Subsequent calls are faster
+
+## Examples
+
+Check out the [`examples/`](examples/) directory for complete examples:
+
+- [`basic_usage.py`](examples/basic_usage.py) - Simple examples to get started
+- [`integration_example.py`](examples/integration_example.py) - Advanced integration patterns
+- [`chatbot.py`](examples/chatbot.py) - Interactive chatbot
+- [`data_extraction.py`](examples/data_extraction.py) - Extract structured data
+- [`code_assistant.py`](examples/code_assistant.py) - Code analysis and generation
+
+## Why "chi_llm"?
+
+"Chi" (氣) represents life force or energy flow in Eastern philosophy. This library aims to provide that same effortless flow of AI capabilities into your Python projects - simple, natural, and powerful.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit pull requests.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
 - Google DeepMind for the Gemma 3 model
-- LM Studio Community for GGUF quantization
 - llama.cpp team for the inference engine
-
-## Changelog
-
-### v1.0.0 (2024)
-- Initial release
-- Basic code analysis functionality
-- CLI interface
-- Cross-platform support
-- GPU/CPU auto-detection
+- HuggingFace for model hosting
 
 ---
 
-Made with ❤️ for developers who love clean, analyzed code!
+**Remember**: The best tool is the one that gets out of your way. chi_llm is designed to be exactly that - invisible infrastructure that just works.
+
+```python
+# That's it! You're ready to go 🚀
+from chi_llm import MicroLLM
+llm = MicroLLM()
+print(llm.generate("Hello, World!"))
+```

@@ -1,8 +1,18 @@
 # chi_llm SDK Usage Guide
 
+## 🚀 Zero Configuration Micro-LLM Library
+
+The simplest way to add AI to your Python project. No API keys, no cloud dependencies, no complex setup.
+
 ## Installation
 
-### From GitHub (Private Repository)
+### From PyPI (when published)
+
+```bash
+pip install chi-llm
+```
+
+### From GitHub
 
 ```bash
 # Install directly from GitHub
@@ -29,69 +39,67 @@ pip install -e .
 
 ## Quick Start
 
+### The Simplest Way
+
+```python
+from chi_llm import quick_llm
+
+# One-liner AI
+print(quick_llm("Write a haiku about Python"))
+```
+
 ### Basic Usage
 
 ```python
-from chi_llm import CodeAnalyzer
+from chi_llm import MicroLLM
 
-# Initialize analyzer (downloads model on first use)
-analyzer = CodeAnalyzer()
+# Zero configuration - just works!
+llm = MicroLLM()
 
-# Analyze code snippet
-code = """
-def hello_world():
-    print("Hello, World!")
-"""
+# Generate text
+response = llm.generate("Explain quantum computing")
+print(response)
 
-result = analyzer.analyze(code)
-print(result)
+# Or use it as a callable
+response = llm("What is the meaning of life?")
+print(response)
 ```
 
-### Analyzing Files
+## New Primary API - MicroLLM
+
+### All-in-One LLM Methods
 
 ```python
-from chi_llm import CodeAnalyzer
+from chi_llm import MicroLLM
 
-analyzer = CodeAnalyzer()
+llm = MicroLLM()
 
-# Analyze a file directly
-result = analyzer.analyze_file("script.py")
-print(result)
+# 💬 Chat with context
+response = llm.chat("What's the weather like?")
+history = [{"user": "What's the weather?", "assistant": response}]
+followup = llm.chat("And tomorrow?", history=history)
 
-# With custom question
-result = analyzer.analyze_file(
-    "script.py", 
-    question="Find security vulnerabilities"
-)
-print(result)
-```
+# ✍️ Complete text
+completion = llm.complete("The quick brown fox")
 
-### Custom Questions
+# ❓ Ask questions
+answer = llm.ask("What is Python?")
+answer_with_context = llm.ask("What's the bug here?", context=code_snippet)
 
-```python
-from chi_llm import CodeAnalyzer
+# 📊 Extract structured data
+json_data = llm.extract("John is 30 years old", format="json")
 
-analyzer = CodeAnalyzer()
+# 📝 Summarize
+summary = llm.summarize(long_text, max_sentences=3)
 
-code = """
-def factorial(n):
-    if n == 0:
-        return 1
-    return n * factorial(n-1)
-"""
+# 🌍 Translate
+translation = llm.translate("Bonjour", target_language="English")
 
-# Ask specific questions
-questions = [
-    "What is the time complexity?",
-    "Could this cause a stack overflow?",
-    "Suggest optimizations",
-    "Write unit tests for this function"
-]
+# 🏷️ Classify
+category = llm.classify("I love this!", categories=["positive", "negative", "neutral"])
 
-for question in questions:
-    result = analyzer.analyze(code, question=question)
-    print(f"Q: {question}")
-    print(f"A: {result}\n")
+# 💻 Analyze code (backward compatible)
+analysis = llm.analyze(code_snippet)
 ```
 
 ## Advanced Usage

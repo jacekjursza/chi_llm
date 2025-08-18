@@ -1,43 +1,99 @@
 """
-chi_llm - AI-powered code analysis using Gemma 3 270M model.
+chi_llm - Zero Configuration Micro-LLM Library for Python
 
-A lightweight, privacy-focused code analyzer that runs completely offline
-using Google's Gemma 3 270M model.
+The simplest way to add AI to your Python project. No API keys, no cloud dependencies,
+no complex setup. Just import and use.
 
-Basic usage:
-    >>> from chi_llm import CodeAnalyzer
-    >>> analyzer = CodeAnalyzer()
-    >>> result = analyzer.analyze("def hello(): return 'world'")
-    >>> print(result)
+Quick start:
+    >>> from chi_llm import MicroLLM
+    >>> llm = MicroLLM()
+    >>> response = llm.generate("Hello, how are you?")
+    >>> print(response)
 
-Advanced usage:
-    >>> # Analyze with custom question
-    >>> analyzer = CodeAnalyzer()
-    >>> code = "def factorial(n): return 1 if n == 0 else n * factorial(n-1)"
-    >>> result = analyzer.analyze(code, question="Is this implementation efficient?")
+Even quicker:
+    >>> from chi_llm import quick_llm
+    >>> print(quick_llm("Write a haiku about Python"))
+
+Common use cases:
+    >>> # Chat conversation
+    >>> llm.chat("What's the weather like?")
     
-    >>> # Analyze file directly
-    >>> result = analyzer.analyze_file("script.py", question="Find potential bugs")
+    >>> # Text completion
+    >>> llm.complete("The quick brown fox")
+    
+    >>> # Question answering
+    >>> llm.ask("What is Python?")
+    
+    >>> # Code analysis (backward compatible)
+    >>> llm.analyze("def hello(): return 'world'")
+    
+    >>> # Data extraction
+    >>> llm.extract("John is 30 years old", format="json")
+    
+    >>> # Summarization
+    >>> llm.summarize(long_text, max_sentences=3)
 """
 
-from .analyzer import (
-    CodeAnalyzer,
-    load_model,
-    analyze_code,
-    DEFAULT_QUESTION,
+# New primary API
+from .core import (
+    MicroLLM,
+    quick_llm,
     MODEL_REPO,
     MODEL_FILE,
     MODEL_DIR
 )
 
-__version__ = "1.0.0"
-__author__ = "AI Assistant"
+# Prompt templates
+from .prompts import (
+    PromptTemplates,
+    code_prompt,
+    data_prompt
+)
+
+# Utilities
+from .utils import (
+    load_config,
+    truncate_text,
+    format_chat_history,
+    clean_response,
+    get_model_info
+)
+
+# Backward compatibility
+from .analyzer import (
+    CodeAnalyzer,
+    load_model,
+    analyze_code,
+    DEFAULT_QUESTION
+)
+
+__version__ = "2.0.0"
+__author__ = "Jacek Jursza"
 __all__ = [
+    # Primary API
+    "MicroLLM",
+    "quick_llm",
+    
+    # Prompts
+    "PromptTemplates",
+    "code_prompt",
+    "data_prompt",
+    
+    # Utils
+    "load_config",
+    "truncate_text",
+    "format_chat_history",
+    "clean_response",
+    "get_model_info",
+    
+    # Backward compatibility
     "CodeAnalyzer",
     "load_model",
     "analyze_code",
-    "DEFAULT_QUESTION",
+    
+    # Constants
     "MODEL_REPO",
     "MODEL_FILE",
-    "MODEL_DIR"
+    "MODEL_DIR",
+    "DEFAULT_QUESTION"
 ]
