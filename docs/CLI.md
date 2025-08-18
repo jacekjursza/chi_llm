@@ -1,0 +1,372 @@
+# Chi_LLM CLI Documentation
+
+Chi_LLM provides a powerful command-line interface for all its features.
+
+## Installation
+
+After installing chi_llm, the CLI is available as:
+- `chi-llm` (main command)
+- `code-analyzer` (backward compatibility)
+
+## Quick Examples
+
+```bash
+# Generate text
+chi-llm generate "Write a haiku about Python"
+
+# Interactive chat
+chi-llm chat
+
+# Ask a question
+chi-llm ask "What is the capital of France?"
+
+# Analyze code
+chi-llm analyze script.py -q "Find potential bugs"
+
+# Summarize text
+chi-llm summarize "Long text here..." -s 3
+
+# Interactive mode
+chi-llm interactive
+```
+
+## Available Commands
+
+### 📝 `generate` - Generate text from prompt
+
+```bash
+# Simple generation
+chi-llm generate "Write a story about a robot"
+
+# From file
+chi-llm generate -f prompt.txt
+
+# With parameters
+chi-llm generate "Explain quantum computing" -t 0.3 -m 500
+```
+
+**Options:**
+- `-f, --file` - Read prompt from file
+- `-t, --temperature` - Creativity level (0.0-1.0, default: 0.7)
+- `-m, --max-tokens` - Maximum response length (default: 2048)
+
+### 💬 `chat` - Interactive chat mode
+
+```bash
+# Start chat session
+chi-llm chat
+
+# With custom settings
+chi-llm chat -t 0.8 -m 1024
+```
+
+**Features:**
+- Maintains conversation context
+- Type `exit`, `quit`, or `bye` to stop
+- Remembers last 10 exchanges
+
+### ✏️ `complete` - Complete/continue text
+
+```bash
+# Complete text
+chi-llm complete "The quick brown fox"
+
+# From file
+chi-llm complete -f story.txt
+```
+
+### ❓ `ask` - Ask questions
+
+```bash
+# Simple question
+chi-llm ask "What is machine learning?"
+
+# With context
+chi-llm ask "What does this do?" -c "def factorial(n): return 1 if n==0 else n*factorial(n-1)"
+
+# Context from file
+chi-llm ask "Summarize this" -cf document.txt
+```
+
+**Options:**
+- `-c, --context` - Provide context for the question
+- `-cf, --context-file` - Read context from file
+
+### 🔍 `analyze` - Analyze code files
+
+```bash
+# Basic analysis
+chi-llm analyze main.py
+
+# Custom question
+chi-llm analyze script.js -q "Find security issues"
+
+# Force CPU mode
+chi-llm analyze app.cpp --no-gpu
+```
+
+### 📊 `extract` - Extract structured data
+
+```bash
+# Extract JSON
+chi-llm extract "John is 30 years old" --format json
+
+# With schema
+chi-llm extract "Meeting at 3pm tomorrow" --schema '{"time": "string", "date": "string"}'
+
+# Save to file
+chi-llm extract -f email.txt --format json -o data.json
+```
+
+**Options:**
+- `--format` - Output format: `json` or `yaml`
+- `--schema` - JSON schema for extraction
+- `-o, --output` - Save to file
+
+### 📄 `summarize` - Summarize text
+
+```bash
+# Summarize text
+chi-llm summarize "Long article text..."
+
+# From file
+chi-llm summarize -f article.txt -s 5
+
+# Control length
+chi-llm summarize "Text" -s 3  # Max 3 sentences
+```
+
+### 🌐 `translate` - Translate text
+
+```bash
+# Translate to English (default)
+chi-llm translate "Bonjour le monde"
+
+# Specify target language
+chi-llm translate "Hello world" -l Spanish
+
+# From file
+chi-llm translate -f document.txt -l German
+```
+
+### 🏷️ `classify` - Classify text
+
+```bash
+# Sentiment analysis
+chi-llm classify "I love this product!" -c "positive,negative,neutral"
+
+# Topic classification
+chi-llm classify -f article.txt -c "tech,sports,politics,entertainment"
+```
+
+### 📋 `template` - Use prompt templates
+
+```bash
+# Code review
+chi-llm template code-review "def add(a,b): return a+b" --language Python
+
+# Write tests
+chi-llm template write-tests -f function.py --framework pytest
+
+# Generate SQL
+chi-llm template sql "Get all users who signed up last month"
+
+# Email draft
+chi-llm template email "Meeting reschedule request" --tone friendly
+
+# Commit message
+chi-llm template commit "Added login functionality and fixed bugs"
+```
+
+**Available Templates:**
+- `code-review` - Review code for issues
+- `explain-code` - Explain how code works
+- `fix-error` - Fix code errors
+- `write-tests` - Generate unit tests
+- `optimize` - Optimize code performance
+- `document` - Add documentation
+- `sql` - Generate SQL from description
+- `regex` - Create regex patterns
+- `email` - Draft professional emails
+- `commit` - Generate commit messages
+- `user-story` - Create user stories
+
+### 🧠 `rag` - RAG (Retrieval Augmented Generation)
+
+**Note:** Requires installation with `pip install chi-llm[rag]`
+
+#### Query documents
+
+```bash
+# Quick query without saving
+chi-llm rag query "What is Python?" -d doc1.txt doc2.txt doc3.txt
+
+# Query existing database
+chi-llm rag query "How does it work?" --db knowledge.db
+
+# With sources
+chi-llm rag query "Explain the process" --db knowledge.db -s
+
+# From config
+chi-llm rag query "What's the purpose?" --config rag_config.yaml
+```
+
+#### Manage knowledge base
+
+```bash
+# Add documents to database
+chi-llm rag add doc1.txt doc2.txt --db knowledge.db
+
+# Search documents
+chi-llm rag search "machine learning" --db knowledge.db -k 5
+
+# Database info
+chi-llm rag info --db knowledge.db
+```
+
+### 🎮 `interactive` - Interactive mode
+
+```bash
+chi-llm interactive
+```
+
+**Interactive Commands:**
+- `chat` - Start chat conversation
+- `generate TEXT` - Generate text
+- `complete TEXT` - Complete text
+- `ask QUESTION` - Ask a question
+- `summarize TEXT` - Summarize text
+- `translate TEXT` - Translate to English
+- `help` - Show available commands
+- `exit` - Exit interactive mode
+
+## Configuration
+
+### Using config files
+
+Create `.chi_llm.yaml` in your project:
+
+```yaml
+model:
+  temperature: 0.7
+  max_tokens: 2048
+verbose: false
+```
+
+### Environment variables
+
+```bash
+export CHI_LLM_CONFIG=/path/to/config.yaml
+```
+
+## Advanced Usage
+
+### Piping and redirection
+
+```bash
+# Pipe input
+echo "Explain this code" | chi-llm generate
+
+# Redirect output
+chi-llm generate "Write a README" > README.md
+
+# Chain commands
+cat article.txt | chi-llm summarize -s 5 > summary.txt
+```
+
+### Scripting
+
+```bash
+#!/bin/bash
+# Analyze all Python files
+for file in *.py; do
+    echo "Analyzing $file..."
+    chi-llm analyze "$file" -q "Find bugs" >> analysis.log
+done
+```
+
+### Aliases
+
+Add to your `.bashrc` or `.zshrc`:
+
+```bash
+alias ai='chi-llm generate'
+alias chat='chi-llm chat'
+alias explain='chi-llm ask'
+alias tldr='chi-llm summarize -s 3'
+```
+
+## Examples
+
+### Code review workflow
+
+```bash
+# Review changes
+git diff | chi-llm template code-review -f -
+
+# Generate commit message
+git diff --staged | chi-llm template commit -f -
+```
+
+### Documentation generation
+
+```bash
+# Document a function
+chi-llm template document -f function.py --style google > function_docs.md
+
+# Generate README
+chi-llm generate "Write a README for a Python package that does X" > README.md
+```
+
+### Data processing
+
+```bash
+# Extract data from emails
+chi-llm extract -f email.txt --format json | jq '.contacts'
+
+# Classify support tickets
+for ticket in tickets/*.txt; do
+    category=$(chi-llm classify -f "$ticket" -c "bug,feature,question")
+    echo "$ticket: $category"
+done
+```
+
+### RAG for documentation
+
+```bash
+# Build knowledge base from docs
+chi-llm rag add docs/*.md --db docs.db
+
+# Query documentation
+chi-llm rag query "How do I configure logging?" --db docs.db
+```
+
+## Tips and Tricks
+
+1. **Speed vs Quality**: Lower temperature (0.1-0.3) for factual tasks, higher (0.7-0.9) for creative tasks
+
+2. **Context Windows**: Keep prompts under 6000 characters for best performance
+
+3. **Batch Processing**: Use shell loops for processing multiple files
+
+4. **Output Formats**: Combine with `jq` for JSON processing, `pandoc` for format conversion
+
+5. **Templates**: Create custom templates by combining base commands
+
+## Troubleshooting
+
+- **Model not loading**: First run downloads ~200MB model, ensure stable internet
+- **Out of memory**: Reduce `--max-tokens` or close other applications
+- **Slow generation**: Use `--no-gpu` flag if GPU is causing issues
+- **RAG not working**: Install with `pip install chi-llm[rag]`
+
+## Getting Help
+
+```bash
+# General help
+chi-llm --help
+
+# Command-specific help
+chi-llm generate --help
+chi-llm rag query --help
+```
