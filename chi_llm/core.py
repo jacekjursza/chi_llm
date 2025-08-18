@@ -14,7 +14,14 @@ from huggingface_hub import hf_hub_download
 warnings.filterwarnings("ignore")
 os.environ['LLAMA_CPP_LOG_LEVEL'] = 'ERROR'
 
-# Model configuration
+# Import model management
+try:
+    from .models import ModelManager, MODELS
+    HAS_MODEL_MANAGER = True
+except ImportError:
+    HAS_MODEL_MANAGER = False
+
+# Legacy model configuration (fallback)
 MODEL_REPO = "lmstudio-community/gemma-3-270m-it-GGUF"
 MODEL_FILE = "gemma-3-270m-it-Q4_K_M.gguf"
 MODEL_DIR = Path.home() / ".cache" / "chi_llm"
@@ -40,6 +47,7 @@ class MicroLLM:
     def __init__(
         self,
         model_path: Optional[str] = None,
+        model_id: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         verbose: bool = False
@@ -49,6 +57,7 @@ class MicroLLM:
         
         Args:
             model_path: Optional custom model path (auto-downloads if not provided)
+            model_id: Optional model ID from registry (e.g., 'phi3-mini', 'qwen2-1.5b')
             temperature: Creativity level (0.0 = deterministic, 1.0 = creative, default: 0.7)
             max_tokens: Maximum response length (default: 4096)
             verbose: Show model loading progress
@@ -57,6 +66,7 @@ class MicroLLM:
         self.max_tokens = max_tokens
         self.verbose = verbose
         self.model_path = model_path
+        self.model_id = model_id
         self._ensure_model_loaded()
     
     def _ensure_model_loaded(self):
@@ -73,6 +83,43 @@ class MicroLLM:
     
     def _download_model(self) -> str:
         """Download model if not cached (happens only once)."""
+        # Use ModelManager if available and model_id specified
+        if HAS_MODEL_MANAGER and (self.model_id or not self.model_path):
+            manager = ModelManager()
+            
+            # Use specified model_id or get current default
+            if self.model_id:
+                if self.model_id not in MODELS:
+                    raise ValueError(f"Unknown model: {self.model_id}. Run 'chi-llm setup' to see available models.")
+                model_info = MODELS[self.model_id]
+            else:
+                model_info = manager.get_current_model()
+                self.model_id = model_info.id
+            
+            # Check if downloaded
+            model_path = manager.get_model_path(model_info.id)
+            if model_path:
+                if self.verbose:
+                    print(f"✅ Using {model_info.name} from: {model_path}")
+                return str(model_path)
+            
+            # Download model
+            MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            print(f"📥 Downloading {model_info.name} ({model_info.file_size_mb}MB)...")
+            print(f"   Model will be cached in: {MODEL_DIR}")
+            
+            downloaded_path = hf_hub_download(
+                repo_id=model_info.repo,
+                filename=model_info.filename,
+                local_dir=str(MODEL_DIR),
+                resume_download=True
+            )
+            
+            manager.mark_downloaded(model_info.id)
+            print(f"✅ {model_info.name} ready!\n")
+            return downloaded_path
+        
+        # Fallback to legacy behavior
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
         model_path = MODEL_DIR / MODEL_FILE
         
@@ -100,9 +147,15 @@ class MicroLLM:
             if self.verbose:
                 print("🤖 Loading model...")
             
+            # Get context window size from model info if available
+            context_window = 32768  # Default
+            if HAS_MODEL_MANAGER and self.model_id:
+                if self.model_id in MODELS:
+                    context_window = MODELS[self.model_id].context_window
+            
             model = Llama(
                 model_path=model_path,
-                n_ctx=32768,  # Full model context
+                n_ctx=context_window,
                 n_threads=min(4, os.cpu_count() or 4),
                 n_gpu_layers=0,  # CPU by default for maximum compatibility
                 verbose=False

@@ -16,9 +16,10 @@ print(response)
 - **🔌 Zero Configuration** - Works out of the box, no setup required
 - **🏠 100% Local** - Your data never leaves your machine
 - **🎯 Simple API** - One import, intuitive methods
-- **⚡ Lightweight** - 270M parameter model, runs on any hardware
+- **⚡ Multiple Models** - From 270M to 9B, choose what fits your needs
 - **🔒 Private** - No API keys, no telemetry, no tracking
 - **📦 Self-Contained** - Automatically downloads and manages models
+- **🎮 Interactive Setup** - Easy model selection and management
 
 ## Installation
 
@@ -45,6 +46,16 @@ pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[gpu]"
 ```
 
 ## Quick Start
+
+### 🚀 First-Time Setup (Choose Your Model)
+
+```bash
+# Run interactive setup to choose your model
+chi-llm setup
+
+# Or use the default tiny model (270M)
+# It will auto-download on first use
+```
 
 ### The Simplest Example
 
@@ -295,9 +306,52 @@ verbose: false
 export CHI_LLM_CONFIG=/path/to/config.yaml
 ```
 
+## 🧠 Available Models
+
+chi_llm now supports multiple models! Choose based on your needs:
+
+### Recommended Models
+
+| Model | Size | RAM | Best For |
+|-------|------|-----|----------|
+| **Phi-3 Mini** | 3.8B | 5GB | Best quality, recommended for most users |
+| **Qwen2 1.5B** | 1.5B | 3GB | Best small model, great for edge devices |
+| **Gemma 2 2B** | 2B | 4GB | Google's efficient model, good balance |
+
+### All Available Models
+
+```bash
+# List all available models
+chi-llm models list
+
+# Show current model
+chi-llm models current
+
+# Set default model (after downloading via setup)
+chi-llm models set phi3-mini
+```
+
+**Model Categories:**
+- **Tiny (270M)**: Ultra-fast, minimal RAM, basic tasks
+- **Small (1-2B)**: Good quality, runs on most devices
+- **Medium (2-3B)**: Better quality, still efficient
+- **Large (3-9B)**: Best quality, needs more RAM
+
+### Using Specific Models in Code
+
+```python
+from chi_llm import MicroLLM
+
+# Use specific model
+llm = MicroLLM(model_id="phi3-mini")
+
+# Or use the default (configured via setup)
+llm = MicroLLM()
+```
+
 ## Model Information
 
-chi_llm uses Google's **Gemma 3 270M** model:
+The default model is **Gemma 3 270M**, but you can choose from:
 
 - **Size**: ~200MB (downloads automatically on first use)
 - **Parameters**: 270 million

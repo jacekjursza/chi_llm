@@ -14,6 +14,14 @@ from .core import MicroLLM, quick_llm
 from .analyzer import CodeAnalyzer, DEFAULT_QUESTION
 from .prompts import PromptTemplates
 
+# Check for model management support
+try:
+    from .models import ModelManager, MODELS, format_model_info
+    from .setup import SetupWizard
+    HAS_MODELS = True
+except ImportError:
+    HAS_MODELS = False
+
 # Check for RAG support
 try:
     from .rag import MicroRAG, quick_rag
@@ -330,6 +338,76 @@ def cmd_rag(args):
         rag.close()
 
 
+def cmd_setup(args):
+    """Run interactive setup wizard."""
+    if not HAS_MODELS:
+        print("❌ Model management not available")
+        return
+    
+    wizard = SetupWizard()
+    wizard.run()
+
+
+def cmd_models(args):
+    """Model management commands."""
+    if not HAS_MODELS:
+        print("❌ Model management not available")
+        return
+    
+    manager = ModelManager()
+    
+    if args.models_command == 'list':
+        # List all models
+        print("📦 Available Models:\n")
+        current = manager.get_current_model()
+        
+        for model in MODELS.values():
+            is_downloaded = manager.is_downloaded(model.id)
+            is_current = model.id == current.id
+            
+            status = ""
+            if is_current:
+                status = " [CURRENT]"
+            elif is_downloaded:
+                status = " [Downloaded]"
+            
+            print(f"• {model.name} ({model.size}){status}")
+            print(f"  ID: {model.id} | Size: {model.file_size_mb}MB | RAM: {model.recommended_ram_gb}GB")
+            print(f"  {model.description}\n")
+    
+    elif args.models_command == 'current':
+        # Show current model
+        current = manager.get_current_model()
+        print(format_model_info(current, True, True))
+    
+    elif args.models_command == 'set':
+        # Set default model
+        if args.model_id not in MODELS:
+            print(f"❌ Unknown model: {args.model_id}")
+            print("Available models:", ", ".join(MODELS.keys()))
+            return
+        
+        if not manager.is_downloaded(args.model_id):
+            print(f"⚠️  Model {args.model_id} is not downloaded.")
+            print("Run 'chi-llm setup' to download it first.")
+            return
+        
+        manager.set_default_model(args.model_id)
+        model = MODELS[args.model_id]
+        print(f"✅ {model.name} is now the default model!")
+    
+    elif args.models_command == 'info':
+        # Show model info
+        if args.model_id not in MODELS:
+            print(f"❌ Unknown model: {args.model_id}")
+            return
+        
+        model = MODELS[args.model_id]
+        is_downloaded = manager.is_downloaded(args.model_id)
+        is_current = args.model_id == manager.get_current_model().id
+        print(format_model_info(model, is_downloaded, is_current))
+
+
 def cmd_interactive(args):
     """Interactive mode with multiple features."""
     print("🤖 Chi_LLM Interactive Mode")
@@ -536,6 +614,31 @@ def main():
         rag_info.add_argument('--db', required=True, help='Database path')
         
         rag_parser.set_defaults(func=cmd_rag)
+    
+    # Setup command
+    if HAS_MODELS:
+        setup_parser = subparsers.add_parser('setup', help='Interactive model setup wizard')
+        setup_parser.set_defaults(func=cmd_setup)
+        
+        # Models command
+        models_parser = subparsers.add_parser('models', help='Model management')
+        models_sub = models_parser.add_subparsers(dest='models_command', help='Model commands')
+        
+        # Models list
+        models_list = models_sub.add_parser('list', help='List all available models')
+        
+        # Models current
+        models_current = models_sub.add_parser('current', help='Show current model')
+        
+        # Models set
+        models_set = models_sub.add_parser('set', help='Set default model')
+        models_set.add_argument('model_id', help='Model ID (e.g., phi3-mini, qwen2-1.5b)')
+        
+        # Models info
+        models_info = models_sub.add_parser('info', help='Show model details')
+        models_info.add_argument('model_id', help='Model ID')
+        
+        models_parser.set_defaults(func=cmd_models)
     
     # Interactive mode
     inter_parser = subparsers.add_parser('interactive', help='Interactive mode')
