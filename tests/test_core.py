@@ -28,7 +28,7 @@ class TestMicroLLM:
         
         # Verify
         assert llm.temperature == 0.7
-        assert llm.max_tokens == 2048
+        assert llm.max_tokens == 4096
         assert llm.llm is not None
     
     @patch('chi_llm.core.Llama')

@@ -33,7 +33,7 @@ class TestConfigLoading:
         
         assert "model" in config
         assert config["model"]["temperature"] == 0.7
-        assert config["model"]["max_tokens"] == 2048
+        assert config["model"]["max_tokens"] == 4096
         assert config["verbose"] == False
     
     def test_load_yaml_config(self):

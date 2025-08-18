@@ -41,7 +41,7 @@ class MicroLLM:
         self,
         model_path: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
         verbose: bool = False
     ):
         """
@@ -49,8 +49,8 @@ class MicroLLM:
         
         Args:
             model_path: Optional custom model path (auto-downloads if not provided)
-            temperature: Creativity level (0.0 = deterministic, 1.0 = creative)
-            max_tokens: Maximum response length
+            temperature: Creativity level (0.0 = deterministic, 1.0 = creative, default: 0.7)
+            max_tokens: Maximum response length (default: 4096)
             verbose: Show model loading progress
         """
         self.temperature = temperature
@@ -102,7 +102,7 @@ class MicroLLM:
             
             model = Llama(
                 model_path=model_path,
-                n_ctx=8192,
+                n_ctx=32768,  # Full model context
                 n_threads=min(4, os.cpu_count() or 4),
                 n_gpu_layers=0,  # CPU by default for maximum compatibility
                 verbose=False

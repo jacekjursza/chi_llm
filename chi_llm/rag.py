@@ -365,7 +365,7 @@ Answer based on the context provided. If the context doesn't contain the answer,
             embedding_model: sentence-transformers/all-MiniLM-L6-v2
             llm:
                 temperature: 0.7
-                max_tokens: 2048
+                max_tokens: 4096
             documents:
                 - content: "Python is great"
                   metadata: {"type": "fact"}

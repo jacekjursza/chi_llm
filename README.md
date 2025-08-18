@@ -283,7 +283,7 @@ Create a `.chi_llm.yaml` file in your project root:
 ```yaml
 model:
   temperature: 0.7
-  max_tokens: 2048
+  max_tokens: 4096
   top_p: 0.95
   top_k: 40
 verbose: false
@@ -302,7 +302,7 @@ chi_llm uses Google's **Gemma 3 270M** model:
 - **Size**: ~200MB (downloads automatically on first use)
 - **Parameters**: 270 million
 - **Quantization**: 4-bit (Q4_K_M)
-- **Context**: 8,192 tokens
+- **Context**: 32,768 tokens (full model capacity)
 - **Requirements**: 4GB RAM minimum
 
 The model is cached locally in `~/.cache/chi_llm/` and only downloads once.
@@ -312,7 +312,7 @@ The model is cached locally in `~/.cache/chi_llm/` and only downloads once.
 ### MicroLLM Class
 
 ```python
-llm = MicroLLM(temperature=0.7, max_tokens=2048, verbose=False)
+llm = MicroLLM(temperature=0.7, max_tokens=4096, verbose=False)
 ```
 
 **Methods:**

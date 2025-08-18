@@ -27,7 +27,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     default_config = {
         "model": {
             "temperature": 0.7,
-            "max_tokens": 2048,
+            "max_tokens": 4096,
             "top_p": 0.95,
             "top_k": 40
         },

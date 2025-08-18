@@ -48,7 +48,7 @@ chi-llm generate "Explain quantum computing" -t 0.3 -m 500
 **Options:**
 - `-f, --file` - Read prompt from file
 - `-t, --temperature` - Creativity level (0.0-1.0, default: 0.7)
-- `-m, --max-tokens` - Maximum response length (default: 2048)
+- `-m, --max-tokens` - Maximum response length (default: 4096)
 
 ### 💬 `chat` - Interactive chat mode
 
@@ -249,7 +249,7 @@ Create `.chi_llm.yaml` in your project:
 ```yaml
 model:
   temperature: 0.7
-  max_tokens: 2048
+  max_tokens: 4096
 verbose: false
 ```
 

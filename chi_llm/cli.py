@@ -428,13 +428,13 @@ def main():
     gen_parser.add_argument('prompt', nargs='?', help='Text prompt')
     gen_parser.add_argument('-f', '--file', help='Read prompt from file')
     gen_parser.add_argument('-t', '--temperature', type=float, default=0.7, help='Temperature (0.0-1.0)')
-    gen_parser.add_argument('-m', '--max-tokens', type=int, default=2048, help='Max tokens')
+    gen_parser.add_argument('-m', '--max-tokens', type=int, default=4096, help='Max tokens')
     gen_parser.set_defaults(func=cmd_generate)
     
     # Chat command
     chat_parser = subparsers.add_parser('chat', help='Interactive chat mode')
     chat_parser.add_argument('-t', '--temperature', type=float, default=0.7, help='Temperature')
-    chat_parser.add_argument('-m', '--max-tokens', type=int, default=2048, help='Max tokens')
+    chat_parser.add_argument('-m', '--max-tokens', type=int, default=4096, help='Max tokens')
     chat_parser.set_defaults(func=cmd_chat)
     
     # Complete command
@@ -442,7 +442,7 @@ def main():
     comp_parser.add_argument('text', nargs='?', help='Text to complete')
     comp_parser.add_argument('-f', '--file', help='Read text from file')
     comp_parser.add_argument('-t', '--temperature', type=float, default=0.7, help='Temperature')
-    comp_parser.add_argument('-m', '--max-tokens', type=int, default=2048, help='Max tokens')
+    comp_parser.add_argument('-m', '--max-tokens', type=int, default=4096, help='Max tokens')
     comp_parser.set_defaults(func=cmd_complete)
     
     # Ask command
@@ -451,7 +451,7 @@ def main():
     ask_parser.add_argument('-c', '--context', help='Context for the question')
     ask_parser.add_argument('-cf', '--context-file', help='Read context from file')
     ask_parser.add_argument('-t', '--temperature', type=float, default=0.7, help='Temperature')
-    ask_parser.add_argument('-m', '--max-tokens', type=int, default=2048, help='Max tokens')
+    ask_parser.add_argument('-m', '--max-tokens', type=int, default=4096, help='Max tokens')
     ask_parser.set_defaults(func=cmd_ask)
     
     # Analyze command (backward compatibility)
