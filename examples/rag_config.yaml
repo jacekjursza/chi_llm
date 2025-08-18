@@ -1,0 +1,67 @@
+# MicroRAG Configuration Example
+# This file demonstrates how to configure RAG with YAML
+
+# Database configuration
+db_path: ./my_knowledge.db
+
+# Embedding model from HuggingFace
+# Options:
+#   - sentence-transformers/all-MiniLM-L6-v2 (default, 80MB)
+#   - sentence-transformers/all-MiniLM-L12-v2 (120MB, better quality)
+#   - sentence-transformers/paraphrase-MiniLM-L3-v2 (60MB, faster)
+embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+# LLM configuration
+llm:
+  temperature: 0.7
+  max_tokens: 2048
+  verbose: false
+
+# Search configuration
+search:
+  default_top_k: 3
+  default_threshold: 0.5
+
+# Initial documents to load
+documents:
+  - content: "chi_llm is a zero-configuration micro-LLM library for Python."
+    metadata:
+      type: "definition"
+      source: "documentation"
+    
+  - content: "The library uses Gemma 3 270M model for text generation."
+    metadata:
+      type: "technical"
+      source: "documentation"
+    
+  - content: "MicroRAG provides lightweight RAG capabilities using SQLite."
+    metadata:
+      type: "feature"
+      source: "documentation"
+    
+  - content: "Install with pip install chi-llm[rag] for RAG features."
+    metadata:
+      type: "installation"
+      source: "documentation"
+    
+  - content: "The embedding model runs locally without API keys."
+    metadata:
+      type: "feature"
+      source: "documentation"
+
+# Advanced settings (optional)
+advanced:
+  # Cache embeddings for faster repeated queries
+  cache_embeddings: true
+  
+  # Automatically update embeddings when documents change
+  auto_update: true
+  
+  # Maximum document size in characters
+  max_document_size: 10000
+  
+  # Chunking strategy for large documents
+  chunking:
+    enabled: true
+    chunk_size: 500
+    overlap: 50

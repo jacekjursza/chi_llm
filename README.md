@@ -22,14 +22,26 @@ print(response)
 
 ## Installation
 
+### Basic Installation (Minimal)
 ```bash
-pip install chi-llm
+# Just the core LLM functionality
+pip install git+https://github.com/jacekjursza/chi_llm.git
 ```
 
-Or install from GitHub:
+### Installation Variants
 
 ```bash
-pip install git+https://github.com/jacekjursza/chi_llm.git
+# Standard - includes YAML config support
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[standard]"
+
+# Full - all features including RAG
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[full]"
+
+# RAG - specialized for RAG applications
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[rag]"
+
+# GPU support
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[gpu]"
 ```
 
 ## Quick Start
@@ -170,6 +182,86 @@ sql = llm.generate(sql_prompt)
 story_prompt = templates.user_story("dark mode toggle feature")
 user_story = llm.generate(story_prompt)
 ```
+
+## 🧠 RAG (Retrieval Augmented Generation)
+
+**New in v2.1!** Add knowledge base capabilities to your LLM with zero configuration.
+
+### Quick RAG Example
+
+```python
+from chi_llm.rag import quick_rag
+
+# Your documents
+documents = [
+    "Python was created by Guido van Rossum in 1991.",
+    "Python emphasizes code readability and uses indentation.",
+    "Python 3.0 was released on December 3, 2008."
+]
+
+# Ask questions about your documents
+answer = quick_rag("When was Python 3.0 released?", documents)
+print(answer)  # Output: Python 3.0 was released on December 3, 2008.
+```
+
+### Persistent Knowledge Base
+
+```python
+from chi_llm.rag import MicroRAG
+
+# Initialize RAG with persistent storage
+rag = MicroRAG(db_path="./knowledge.db")
+
+# Add documents
+rag.add_document("The Earth orbits around the Sun.")
+rag.add_document("The Moon orbits around the Earth.")
+rag.add_document("A year is the time Earth takes to orbit the Sun.")
+
+# Query your knowledge base
+answer = rag.query("What orbits around the Earth?")
+print(answer)  # Output: The Moon orbits around the Earth.
+
+# Get answers with sources
+result = rag.query("How long is a year?", include_sources=True)
+print(f"Answer: {result['answer']}")
+print(f"Based on {len(result['sources'])} sources")
+```
+
+### RAG with YAML Configuration
+
+Create a `rag_config.yaml`:
+
+```yaml
+db_path: ./my_knowledge.db
+embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+documents:
+  - content: "chi_llm is a zero-configuration micro-LLM library."
+    metadata: {type: "definition"}
+  - content: "It uses Gemma 3 270M model for text generation."
+    metadata: {type: "technical"}
+```
+
+Use it in your code:
+
+```python
+from chi_llm.rag import MicroRAG
+
+# Load from config
+rag = MicroRAG.from_config("rag_config.yaml")
+
+# Ready to answer questions!
+answer = rag.query("What model does chi_llm use?")
+```
+
+### RAG Features
+
+- 🗄️ **SQLite Vector Store** - Efficient local storage with sqlite-vec
+- 🔍 **Semantic Search** - Find relevant documents using embeddings
+- 📚 **Document Management** - Add, search, and manage documents
+- 🏷️ **Metadata Support** - Tag documents with custom metadata
+- ⚡ **Fast & Local** - Everything runs on your machine
+- 📝 **YAML Config** - Configure via simple YAML files
 
 ## Advanced Features
 

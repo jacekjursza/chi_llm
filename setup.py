@@ -15,7 +15,7 @@ else:
 
 setup(
     name="chi-llm",
-    version="2.0.0",
+    version="2.1.0",
     author="Jacek Jursza",
     description="Zero Configuration Micro-LLM Library - The simplest way to add AI to your Python project",
     long_description=long_description,
@@ -42,18 +42,42 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
+        # Minimal requirements - just the core LLM
         "llama-cpp-python>=0.2.0",
         "huggingface-hub>=0.20.0",
-        "pyyaml>=6.0",  # For config file support
     ],
     extras_require={
+        # Standard installation with config support
+        "standard": [
+            "pyyaml>=6.0",  # For YAML config files
+        ],
+        # Full installation with all features
+        "full": [
+            "pyyaml>=6.0",
+            "sentence-transformers>=2.2.0",  # For embeddings
+            "sqlite-vec>=0.1.0",  # Vector store in SQLite
+            "numpy>=1.21.0",  # For vector operations
+            "tqdm>=4.65.0",  # Progress bars
+        ],
+        # RAG-specific installation
+        "rag": [
+            "pyyaml>=6.0",
+            "sentence-transformers>=2.2.0",
+            "sqlite-vec>=0.1.0",
+            "numpy>=1.21.0",
+            "tqdm>=4.65.0",
+        ],
+        # GPU support
         "gpu": [
             "torch>=2.0.0",  # For GPU detection
         ],
+        # Development dependencies
         "dev": [
             "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
             "black>=23.0.0",
             "flake8>=6.0.0",
+            "mypy>=1.0.0",
         ],
     },
     entry_points={

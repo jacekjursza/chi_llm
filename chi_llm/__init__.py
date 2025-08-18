@@ -67,7 +67,7 @@ from .analyzer import (
     DEFAULT_QUESTION
 )
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "Jacek Jursza"
 __all__ = [
     # Primary API
