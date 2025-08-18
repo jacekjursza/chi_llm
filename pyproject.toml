@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chi-llm"
+version = "2.1.0"
+description = "Zero Configuration Micro-LLM Library - The simplest way to add AI to your Python project"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Jacek Jursza"},
+]
+keywords = ["llm", "ai", "ml", "nlp", "gemma", "local-llm", "zero-config", "micro-llm", "text-generation"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Code Generators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+
+dependencies = [
+    "llama-cpp-python>=0.2.0",
+    "huggingface-hub>=0.20.0",
+]
+
+[project.optional-dependencies]
+standard = [
+    "pyyaml>=6.0",
+]
+full = [
+    "pyyaml>=6.0",
+    "sentence-transformers>=2.2.0",
+    "sqlite-vec>=0.1.0",
+    "numpy>=1.21.0",
+    "tqdm>=4.65.0",
+]
+rag = [
+    "pyyaml>=6.0",
+    "sentence-transformers>=2.2.0",
+    "sqlite-vec>=0.1.0",
+    "numpy>=1.21.0",
+    "tqdm>=4.65.0",
+]
+gpu = [
+    "torch>=2.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jacekjursza/chi_llm"
+"Bug Reports" = "https://github.com/jacekjursza/chi_llm/issues"
+"Source" = "https://github.com/jacekjursza/chi_llm"
+Documentation = "https://github.com/jacekjursza/chi_llm#readme"
+
+[project.scripts]
+chi-llm = "chi_llm.cli:main"
+code-analyzer = "chi_llm.cli:main"
+gemma-analyze = "chi_llm.cli:main"
+
+[tool.setuptools]
+packages = ["chi_llm"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+chi_llm = ["*.yaml", "*.yml", "*.json"]

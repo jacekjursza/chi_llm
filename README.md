@@ -21,29 +21,52 @@ print(response)
 - **📦 Self-Contained** - Automatically downloads and manages models
 - **🎮 Interactive Setup** - Easy model selection and management
 
-## Installation
+## 🚀 Installation
 
-### Basic Installation (Minimal)
+### Quick Install (One-Liner)
+
+**Linux/macOS:**
 ```bash
-# Just the core LLM functionality
-pip install git+https://github.com/jacekjursza/chi_llm.git
+curl -sSL https://raw.githubusercontent.com/jacekjursza/chi_llm/master/install.sh | bash
 ```
 
-### Installation Variants
+**Windows PowerShell:**
+```powershell
+iwr -useb https://raw.githubusercontent.com/jacekjursza/chi_llm/master/install.ps1 | iex
+```
+
+**Windows Command Prompt:**
+```cmd
+curl -sSL https://raw.githubusercontent.com/jacekjursza/chi_llm/master/install.bat -o install.bat && install.bat
+```
+
+### Manual Installation
+
+chi_llm requires Python 3.8+ and automatically manages model downloads.
 
 ```bash
-# Standard - includes YAML config support
-pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[standard]"
+# Basic installation
+pip install git+https://github.com/jacekjursza/chi_llm.git
 
-# Full - all features including RAG
-pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[full]"
-
-# RAG - specialized for RAG applications
+# With RAG support  
 pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[rag]"
 
-# GPU support
-pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[gpu]"
+# Full installation (all features)
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[full]"
+
+# Development installation
+git clone https://github.com/jacekjursza/chi_llm.git
+cd chi_llm
+pip install -e ".[dev]"
 ```
+
+### Installation Features
+
+✅ **Automatic dependency management**  
+✅ **Cross-platform compatibility**  
+✅ **Error handling and diagnostics**  
+✅ **PATH configuration assistance**  
+✅ **Zero-config first run experience**
 
 ## Quick Start
 
