@@ -318,7 +318,7 @@ def is_code(text: str) -> bool:
         'public ', 'private ', 'void ',  # Java/C++
         '<?php', '<?=',  # PHP
         '#include', 'int main',  # C/C++
-        'SELECT ', 'INSERT ', 'UPDATE ',  # SQL
+        'SELECT', 'INSERT', 'UPDATE', 'FROM', 'WHERE', 'ORDER BY',  # SQL (case insensitive)
     ]
     
     # Check for common code patterns
@@ -327,10 +327,11 @@ def is_code(text: str) -> bool:
     
     for line in lines[:20]:  # Check first 20 lines
         stripped = line.strip()
+        stripped_upper = stripped.upper()
         
         # Check for code indicators
         for indicator in code_indicators:
-            if indicator in stripped:
+            if indicator.upper() in stripped_upper:
                 code_score += 2
                 break
         
@@ -343,4 +344,4 @@ def is_code(text: str) -> bool:
             code_score += 0.5
     
     # If score is high enough, likely code
-    return code_score >= 5
+    return code_score >= 3
