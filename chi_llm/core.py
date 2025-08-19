@@ -57,7 +57,7 @@ class MicroLLM:
         
         Args:
             model_path: Optional custom model path (auto-downloads if not provided)
-            model_id: Optional model ID from registry (e.g., 'phi3-mini', 'qwen2-1.5b')
+            model_id: Optional model ID from registry (e.g., 'phi3-mini', 'qwen3-1.7b')
             temperature: Creativity level (0.0 = deterministic, 1.0 = creative, default: 0.7)
             max_tokens: Maximum response length (default: 4096)
             verbose: Show model loading progress

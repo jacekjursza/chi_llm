@@ -47,18 +47,31 @@ MODELS = {
         tags=["tiny", "fast", "cpu-friendly", "default"]
     ),
     
-    # 1B+ models
-    "qwen2-1.5b": ModelInfo(
-        id="qwen2-1.5b",
-        name="Qwen2 1.5B",
-        size="1.5B",
-        file_size_mb=980,
-        repo="Qwen/Qwen2.5-1.5B-Instruct-GGUF",
-        filename="qwen2.5-1.5b-instruct-q4_k_m.gguf",
+    # Small Qwen3 models
+    "qwen3-0.6b": ModelInfo(
+        id="qwen3-0.6b",
+        name="Qwen3 0.6B",
+        size="0.6B",
+        file_size_mb=500,
+        repo="Qwen/Qwen3-0.6B-GGUF",
+        filename="qwen3-0.6b-instruct-q5_k_m.gguf",
         context_window=32768,
-        description="Best performing model under 2B, excellent for edge devices",
+        description="Tiny but capable, supports thinking/non-thinking modes",
+        recommended_ram_gb=1.5,
+        tags=["tiny", "versatile", "thinking-mode"]
+    ),
+    
+    "qwen3-1.7b": ModelInfo(
+        id="qwen3-1.7b",
+        name="Qwen3 1.7B",
+        size="1.7B",
+        file_size_mb=1100,
+        repo="Qwen/Qwen3-1.7B-GGUF",
+        filename="qwen3-1.7b-instruct-q5_k_m.gguf",
+        context_window=32768,
+        description="Best performing model under 2B, thinking mode support",
         recommended_ram_gb=3.0,
-        tags=["small", "balanced", "recommended"]
+        tags=["small", "balanced", "recommended", "thinking-mode"]
     ),
     
     "stablelm-2-1.6b": ModelInfo(
@@ -129,17 +142,17 @@ MODELS = {
     ),
     
     # 4B models
-    "qwen2.5-3b": ModelInfo(
-        id="qwen2.5-3b",
-        name="Qwen2.5 3B",
-        size="3B",
-        file_size_mb=2100,
-        repo="Qwen/Qwen2.5-3B-Instruct-GGUF",
-        filename="qwen2.5-3b-instruct-q4_k_m.gguf",
+    "qwen3-8b": ModelInfo(
+        id="qwen3-8b",
+        name="Qwen3 8B",
+        size="8B",
+        file_size_mb=5500,
+        repo="Qwen/Qwen3-8B-GGUF",
+        filename="qwen3-8b-instruct-q5_k_m.gguf",
         context_window=32768,
-        description="Latest Qwen model, excellent multilingual support",
-        recommended_ram_gb=5.0,
-        tags=["large", "multilingual", "latest"]
+        description="Latest Qwen3, excellent reasoning and multilingual support",
+        recommended_ram_gb=9.0,
+        tags=["large", "multilingual", "latest", "thinking-mode"]
     ),
     
     "gemma2-9b": ModelInfo(
@@ -153,6 +166,113 @@ MODELS = {
         description="Heavily quantized 9B model that runs like 4B",
         recommended_ram_gb=6.0,
         tags=["large", "compressed", "powerful"]
+    ),
+    
+    # New blazingly fast models
+    "liquid-lfm2-1.2b": ModelInfo(
+        id="liquid-lfm2-1.2b",
+        name="Liquid LFM2 1.2B",
+        size="1.2B",
+        file_size_mb=1250,
+        repo="liquid/lfm2-1.2b-gguf",
+        filename="lfm2-1.2b-Q8_0.gguf",
+        context_window=32768,
+        description="Blazingly fast hybrid architecture, excels at math & multilingual",
+        recommended_ram_gb=2.5,
+        tags=["small", "fast", "multilingual", "math", "hybrid"]
+    ),
+    
+    "deepseek-r1-qwen-1.5b": ModelInfo(
+        id="deepseek-r1-qwen-1.5b",
+        name="DeepSeek R1 Distill Qwen 1.5B",
+        size="1.5B",
+        file_size_mb=1600,
+        repo="bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF",
+        filename="DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf",
+        context_window=32768,
+        description="Distilled from DeepSeek R1, strong reasoning capabilities",
+        recommended_ram_gb=3.0,
+        tags=["small", "reasoning", "distilled"]
+    ),
+    
+    # Qwen3 thinking models
+    "qwen3-4b-thinking": ModelInfo(
+        id="qwen3-4b-thinking",
+        name="Qwen3 4B Thinking 2507",
+        size="4B",
+        file_size_mb=2800,
+        repo="qwen/qwen3-4b-thinking-2507-gguf",
+        filename="qwen3-4b-thinking-2507-Q5_K_M.gguf",
+        context_window=262144,  # 256K context!
+        description="Advanced reasoning with thinking capability, 256K context",
+        recommended_ram_gb=5.0,
+        tags=["medium", "reasoning", "thinking", "long-context", "256k"]
+    ),
+    
+    "qwen3-4b": ModelInfo(
+        id="qwen3-4b",
+        name="Qwen3 4B Instruct 2507",
+        size="4B",
+        file_size_mb=2800,
+        repo="qwen/qwen3-4b-2507-gguf",
+        filename="qwen3-4b-2507-Q5_K_M.gguf",
+        context_window=262144,  # 256K context!
+        description="Enhanced general capabilities, 256K context",
+        recommended_ram_gb=5.0,
+        tags=["medium", "general", "long-context", "256k"]
+    ),
+    
+    # Qwen2.5-coder series
+    "qwen2.5-coder-0.5b": ModelInfo(
+        id="qwen2.5-coder-0.5b",
+        name="Qwen2.5 Coder 0.5B",
+        size="0.5B",
+        file_size_mb=500,
+        repo="Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+        filename="qwen2.5-coder-0.5b-instruct-q5_k_m.gguf",
+        context_window=32768,
+        description="Tiny coding assistant, perfect for IDE integration",
+        recommended_ram_gb=1.5,
+        tags=["tiny", "coding", "fast", "ide"]
+    ),
+    
+    "qwen2.5-coder-1.5b": ModelInfo(
+        id="qwen2.5-coder-1.5b",
+        name="Qwen2.5 Coder 1.5B",
+        size="1.5B",
+        file_size_mb=1100,
+        repo="Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+        filename="qwen2.5-coder-1.5b-instruct-q5_k_m.gguf",
+        context_window=32768,
+        description="Small but capable coding model",
+        recommended_ram_gb=2.5,
+        tags=["small", "coding", "balanced"]
+    ),
+    
+    "qwen2.5-coder-3b": ModelInfo(
+        id="qwen2.5-coder-3b",
+        name="Qwen2.5 Coder 3B",
+        size="3B",
+        file_size_mb=2100,
+        repo="Qwen/Qwen2.5-Coder-3B-Instruct-GGUF",
+        filename="qwen2.5-coder-3b-instruct-q5_k_m.gguf",
+        context_window=32768,
+        description="Powerful coding model with good performance",
+        recommended_ram_gb=4.0,
+        tags=["medium", "coding", "powerful"]
+    ),
+    
+    "qwen2.5-coder-7b": ModelInfo(
+        id="qwen2.5-coder-7b",
+        name="Qwen2.5 Coder 7B",
+        size="7B",
+        file_size_mb=4900,
+        repo="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+        filename="qwen2.5-coder-7b-instruct-q5_k_m.gguf",
+        context_window=32768,
+        description="Professional-grade coding model, excellent for complex tasks",
+        recommended_ram_gb=8.0,
+        tags=["large", "coding", "professional", "complex"]
     )
 }
 
@@ -395,7 +515,7 @@ def get_model_by_size(size_category: str) -> Optional[ModelInfo]:
     """Get recommended model by size category."""
     size_map = {
         "tiny": "gemma-270m",
-        "small": "qwen2-1.5b",
+        "small": "qwen3-1.7b",
         "medium": "gemma2-2b",
         "large": "phi3-mini"
     }

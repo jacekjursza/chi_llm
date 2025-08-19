@@ -143,7 +143,7 @@ def main():
    export CHI_LLM_MODEL=gemma-270m
    
 2. For projects: Create .chi_llm.json
-   chi-llm models set qwen2-1.5b --local
+   chi-llm models set qwen3-1.7b --local
    
 3. For personal: Use global config
    chi-llm setup

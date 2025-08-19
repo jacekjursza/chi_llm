@@ -1,0 +1,5 @@
+{
+  "default_model": "qwen3-1.7b",
+  "preferred_context": 32768,
+  "preferred_max_tokens": 4096
+}

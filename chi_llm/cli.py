@@ -638,7 +638,7 @@ def main():
         
         # Models set
         models_set = models_sub.add_parser('set', help='Set default model')
-        models_set.add_argument('model_id', help='Model ID (e.g., phi3-mini, qwen2-1.5b)')
+        models_set.add_argument('model_id', help='Model ID (e.g., phi3-mini, qwen3-1.7b)')
         models_set.add_argument('--local', action='store_true', help='Save to local project config')
         
         # Models info

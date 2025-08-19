@@ -6,6 +6,7 @@ Helps users download and configure models.
 
 import sys
 import os
+import json
 from pathlib import Path
 from typing import Optional, List
 import time
@@ -68,16 +69,16 @@ Welcome to chi_llm! Let's set up the perfect model for your system.
         if ram < 4:
             print("   Your system has limited RAM. Recommended models:")
             print("   • Gemma 270M - Ultra lightweight, runs on any system")
-            print("   • Qwen2 1.5B - Best quality for low-RAM systems")
+            print("   • Qwen3 1.7B - Best quality with thinking mode support")
         elif ram < 8:
             print("   Your system can run medium-sized models. Recommended:")
-            print("   • Qwen2 1.5B - Excellent balance of size and quality")
+            print("   • Qwen3 1.7B - Excellent balance with thinking mode")
             print("   • Gemma 2 2B - Google's efficient 2B model")
             print("   • Phi-3 Mini - Best quality in 3.8B size")
         else:
             print("   Your system can run any model! Recommended:")
             print("   • Phi-3 Mini (3.8B) - Best overall quality")
-            print("   • Qwen2.5 3B - Latest with multilingual support")
+            print("   • Qwen3 4B - Latest with 256K context window")
             print("   • Gemma 2 9B (Q2) - Most powerful option")
         print()
     
@@ -238,6 +239,66 @@ Welcome to chi_llm! Let's set up the perfect model for your system.
                 except ValueError:
                     print(f"{self.colors['red']}Invalid input!{self.colors['end']}")
     
+    def configure_rag_embeddings(self):
+        """Configure RAG embedding models."""
+        print(f"\n{self.colors['cyan']}🔍 RAG Embedding Configuration{self.colors['end']}")
+        print("\nFastEmbed models are optimized ONNX models that run efficiently on CPU.")
+        print("\nAvailable embedding models:")
+        
+        embedding_models = [
+            ("intfloat/multilingual-e5-base", "280MB, 768 dims, 100+ languages (default)"),
+            ("BAAI/bge-small-en-v1.5", "34MB, 384 dims, English only (lightweight)"),
+            ("BAAI/bge-base-en-v1.5", "110MB, 768 dims, English (balanced)"),
+            ("BAAI/bge-large-en-v1.5", "335MB, 1024 dims, English (best quality)"),
+            ("intfloat/multilingual-e5-small", "120MB, 384 dims, 100+ languages"),
+            ("intfloat/multilingual-e5-large", "560MB, 1024 dims, 100+ languages"),
+            ("nomic-ai/nomic-embed-text-v1.5", "140MB, 768 dims, 8192 tokens context"),
+            ("jinaai/jina-embeddings-v2-base-en", "160MB, 768 dims, 8192 tokens"),
+            ("Keep current", "No changes")
+        ]
+        
+        for i, (model, desc) in enumerate(embedding_models, 1):
+            if i <= 4:  # First 4 are recommended
+                print(f"  {self.colors['green']}{i}. {model}{self.colors['end']} - {desc}")
+            else:
+                print(f"  {i}. {model} - {desc}")
+        
+        choice = input("\nSelect embedding model (1-9): ").strip()
+        
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(embedding_models) - 1:  # Not "Keep current"
+                model_name = embedding_models[idx][0]
+                # Save to config
+                config_path = Path.home() / '.cache' / 'chi_llm' / 'rag_config.json'
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                config = {}
+                if config_path.exists():
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                
+                config['embedding_model'] = model_name
+                
+                with open(config_path, 'w') as f:
+                    json.dump(config, f, indent=2)
+                
+                print(f"{self.colors['green']}✅ RAG will use {model_name} for embeddings{self.colors['end']}")
+                print(f"Config saved to: {config_path}")
+                
+                # Check if fastembed is installed
+                try:
+                    import fastembed
+                except ImportError:
+                    print(f"\n{self.colors['yellow']}⚠️  FastEmbed not installed. Install with:{self.colors['end']}")
+                    print(f"  pip install 'chi-llm[rag]'")
+            elif idx == len(embedding_models) - 1:
+                print("Configuration unchanged.")
+            else:
+                print(f"{self.colors['red']}Invalid selection!{self.colors['end']}")
+        except (ValueError, IndexError):
+            print(f"{self.colors['red']}Invalid input!{self.colors['end']}")
+    
     def run(self):
         """Run the setup wizard."""
         self.print_header()
@@ -247,20 +308,23 @@ Welcome to chi_llm! Let's set up the perfect model for your system.
         print(f"{self.colors['yellow']}Setup Options:{self.colors['end']}")
         print("  1. Quick setup (recommended model)")
         print("  2. Advanced setup (choose from all models)")
-        print("  3. Show current configuration")
-        print("  4. Exit")
+        print("  3. Configure RAG embeddings (optional)")
+        print("  4. Show current configuration")
+        print("  5. Exit")
         
-        choice = input("\nYour choice (1-4): ").strip()
+        choice = input("\nYour choice (1-5): ").strip()
         
         if choice == '1':
             self.quick_setup()
         elif choice == '2':
             self.advanced_setup()
         elif choice == '3':
+            self.configure_rag_embeddings()
+        elif choice == '4':
             current = self.manager.get_current_model()
             print(f"\n{self.colors['cyan']}Current Configuration:{self.colors['end']}")
             print(format_model_info(current, True, True))
-        elif choice == '4':
+        elif choice == '5':
             print("Goodbye!")
         else:
             print(f"{self.colors['red']}Invalid choice!{self.colors['end']}")
