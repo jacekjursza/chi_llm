@@ -59,6 +59,44 @@ from .utils import (
     get_model_info
 )
 
+# Model registry helpers (programmatic access)
+from .models import ModelManager, MODELS, ModelInfo  # type: ignore
+
+
+def list_available_models(show_all: bool = True):
+    """Return a list of available models with minimal metadata.
+
+    Each item: {id, name, size, context_window, downloaded: bool}
+    """
+    mgr = ModelManager()
+    items = mgr.list_models(show_all=show_all)
+    out = []
+    for m in items:
+        try:
+            downloaded = mgr.is_downloaded(m.id)
+        except Exception:
+            downloaded = False
+        out.append({
+            "id": m.id,
+            "name": m.name,
+            "size": m.size,
+            "context_window": m.context_window,
+            "downloaded": downloaded,
+        })
+    return out
+
+
+def get_current_model_status():
+    """Return current model id and status.
+
+    Returns: {id, name, downloaded: bool, path: str | ''}
+    """
+    mgr = ModelManager()
+    cur = mgr.get_current_model()
+    downloaded = mgr.is_downloaded(cur.id)
+    path = mgr.get_model_path(cur.id)
+    return {"id": cur.id, "name": cur.name, "downloaded": downloaded, "path": str(path or "")}
+
 # Backward compatibility
 from .analyzer import (
     CodeAnalyzer,
@@ -85,6 +123,12 @@ __all__ = [
     "format_chat_history",
     "clean_response",
     "get_model_info",
+    # Registry helpers
+    "ModelManager",
+    "ModelInfo",
+    "MODELS",
+    "list_available_models",
+    "get_current_model_status",
     
     # Backward compatibility
     "CodeAnalyzer",
