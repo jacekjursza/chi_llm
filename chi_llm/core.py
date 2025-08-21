@@ -29,6 +29,7 @@ MODEL_DIR = Path.home() / ".cache" / "chi_llm"
 # Singleton pattern for model management
 _model_instance = None
 _model_lock = Lock()
+_generation_lock = Lock()  # Protect model inference calls
 
 
 class MicroLLM:
@@ -206,7 +207,9 @@ class MicroLLM:
             formatted_prompt = f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
         
         try:
-            output = self.llm(formatted_prompt, echo=False, **params)
+            # Use lock to ensure thread-safe model access
+            with _generation_lock:
+                output = self.llm(formatted_prompt, echo=False, **params)
             return output['choices'][0]['text'].strip()
         except Exception as e:
             raise RuntimeError(f"Generation failed: {e}")
@@ -238,13 +241,15 @@ class MicroLLM:
         conversation += f"<start_of_turn>user\n{message}<end_of_turn>\n<start_of_turn>model\n"
         
         try:
-            output = self.llm(
-                conversation,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                echo=False,
-                stop=["<end_of_turn>", "<eos>", "</s>", "<start_of_turn>", "\n\n\n", "<|endoftext|>"]
-            )
+            # Use lock to ensure thread-safe model access
+            with _generation_lock:
+                output = self.llm(
+                    conversation,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    echo=False,
+                    stop=["<end_of_turn>", "<eos>", "</s>", "<start_of_turn>", "\n\n\n", "<|endoftext|>"]
+                )
             return output['choices'][0]['text'].strip()
         except Exception as e:
             raise RuntimeError(f"Chat failed: {e}")
@@ -265,12 +270,14 @@ class MicroLLM:
         """
         # For completion, we use a simpler format
         try:
-            output = self.llm(
-                text,
-                max_tokens=kwargs.get('max_tokens', 100),
-                temperature=kwargs.get('temperature', 0.7),
-                echo=False
-            )
+            # Use lock to ensure thread-safe model access
+            with _generation_lock:
+                output = self.llm(
+                    text,
+                    max_tokens=kwargs.get('max_tokens', 100),
+                    temperature=kwargs.get('temperature', 0.7),
+                    echo=False
+                )
             return output['choices'][0]['text'].strip()
         except Exception as e:
             raise RuntimeError(f"Completion failed: {e}")
