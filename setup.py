@@ -96,7 +96,6 @@ setup(
     entry_points={
         "console_scripts": [
             "chi-llm=chi_llm.cli:main",
-            "chi=chi_llm.cli:main",
             "code-analyzer=chi_llm.cli:main",
             "gemma-analyze=chi_llm.cli:main",
         ],

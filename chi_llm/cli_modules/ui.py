@@ -29,7 +29,7 @@ def _print_node_instructions():
         print("  • Winget: winget install OpenJS.NodeJS")
         print("  • Chocolatey: choco install nodejs-lts")
         print("  • Scoop: scoop install nodejs-lts")
-    print("\nAfter installation, try: chi ui")
+    print("\nAfter installation, try: chi-llm config")
 
 
 def cmd_ui(args):
@@ -67,27 +67,38 @@ def cmd_ui(args):
         print(f"❌ Failed to launch UI: {e}")
 
 
-def register(subparsers: _SubParsersAction):
-    sub = subparsers.add_parser(
-        "ui", help="Run the Ink-based UI via npx (requires Node.js)"
-    )
-    sub.add_argument(
+def _register_common(parser):
+    parser.add_argument(
         "--source",
         help=(
             "npx package spec (default: github:jacekjursza/chi_llm_ui). "
             "Can also be set via CHI_LLM_UI_SOURCE."
         ),
     )
-    sub.add_argument(
+    parser.add_argument(
         "--branch",
         help=(
             "Git ref for GitHub source (default: main). "
             "Can also be set via CHI_LLM_UI_BRANCH."
         ),
     )
-    sub.add_argument(
+    parser.add_argument(
         "ui_args",
         nargs="*",
         help="Arguments to pass through to the UI (after --)",
     )
-    sub.set_defaults(func=cmd_ui)
+    parser.set_defaults(func=cmd_ui)
+
+
+def register(subparsers: _SubParsersAction):
+    # Preferred command name
+    cfg = subparsers.add_parser(
+        "config", help="Open the interactive configuration UI (requires Node.js)"
+    )
+    _register_common(cfg)
+
+    # Alias for convenience/back-compat
+    ui = subparsers.add_parser(
+        "ui", help="Run the Ink-based UI via npx (requires Node.js)"
+    )
+    _register_common(ui)

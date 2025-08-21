@@ -554,10 +554,10 @@ Notes:
 
 ```bash
 # Run the interactive UI (requires Node.js + npx)
-chi ui
+chi-llm config
 
 # Custom source (e.g., GitHub repo with package.json + bin)
-chi ui --source github:jacekjursza/chi_llm_ui --branch main
+chi-llm config --source github:jacekjursza/chi_llm_ui --branch main
 ```
 
 If Node.js is not installed, the command prints platform-specific instructions.
