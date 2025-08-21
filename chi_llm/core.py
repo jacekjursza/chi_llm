@@ -23,7 +23,7 @@ except ImportError:
 
 # Legacy model configuration (fallback)
 MODEL_REPO = "lmstudio-community/gemma-3-270m-it-GGUF"
-MODEL_FILE = "gemma-3-270m-it-Q4_K_M.gguf"
+MODEL_FILE = "gemma-3-270m-it-Q8_0.gguf"  # Use Q8_0 for better quality
 MODEL_DIR = Path.home() / ".cache" / "chi_llm"
 
 # Singleton pattern for model management
@@ -175,6 +175,7 @@ class MicroLLM:
         Args:
             prompt: Input text prompt
             **kwargs: Override default parameters (temperature, max_tokens, etc.)
+                     Special: use_raw=True to skip Gemma formatting
             
         Returns:
             Generated text response
@@ -182,18 +183,27 @@ class MicroLLM:
         Example:
             >>> llm.generate("Write a haiku about Python")
         """
+        # Check if we should use raw prompt (no formatting)
+        use_raw = kwargs.pop('use_raw', False)
+        
         params = {
             'temperature': self.temperature,
             'max_tokens': self.max_tokens,
             'top_p': 0.95,
             'top_k': 40,
+            'min_p': 0.05,  # Add min_p parameter for better sampling
             'repeat_penalty': 1.1,
-            'stop': ["<end_of_turn>", "<eos>", "\n\n\n"]
+            'stop': ["<end_of_turn>", "<eos>", "</s>", "<start_of_turn>", "\n\n\n", "<|endoftext|>"]
         }
         params.update(kwargs)
         
-        # Format for Gemma model
-        formatted_prompt = f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model"
+        # Use raw prompt or format for Gemma model
+        if use_raw:
+            # Use prompt as-is for simple completions
+            formatted_prompt = prompt
+        else:
+            # Format for Gemma model (without BOS - llama.cpp adds it automatically)
+            formatted_prompt = f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
         
         try:
             output = self.llm(formatted_prompt, echo=False, **params)
@@ -225,7 +235,7 @@ class MicroLLM:
                 if 'assistant' in turn:
                     conversation += f"<start_of_turn>model\n{turn['assistant']}<end_of_turn>\n"
         
-        conversation += f"<start_of_turn>user\n{message}<end_of_turn>\n<start_of_turn>model"
+        conversation += f"<start_of_turn>user\n{message}<end_of_turn>\n<start_of_turn>model\n"
         
         try:
             output = self.llm(
@@ -233,7 +243,7 @@ class MicroLLM:
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
                 echo=False,
-                stop=["<end_of_turn>", "<eos>"]
+                stop=["<end_of_turn>", "<eos>", "</s>", "<start_of_turn>", "\n\n\n", "<|endoftext|>"]
             )
             return output['choices'][0]['text'].strip()
         except Exception as e:

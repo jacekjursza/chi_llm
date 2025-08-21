@@ -193,8 +193,13 @@ def clean_response(response: str) -> str:
     artifacts = [
         "<end_of_turn>",
         "<eos>",
+        "</s>",
+        "<start_of_turn>",
+        "<|endoftext|>",
         "[END]",
-        "[DONE]"
+        "[DONE]",
+        "<|im_end|>",
+        "<|im_start|>"
     ]
     
     for artifact in artifacts:
