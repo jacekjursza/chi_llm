@@ -553,11 +553,10 @@ Notes:
 ### UI (Ink)
 
 ```bash
-# Run the interactive UI (requires Node.js + npx)
+# Run the interactive UI (requires Node.js)
 chi-llm config
 
-# Custom source (e.g., GitHub repo with package.json + bin)
-chi-llm config --source github:jacekjursza/chi_llm_ui --branch main
+# UI is bundled with chi_llm and runs from the installed package directory.
 ```
 
 If Node.js is not installed, the command prints platform-specific instructions.

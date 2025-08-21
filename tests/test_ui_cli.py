@@ -10,25 +10,31 @@ from chi_llm.cli_modules import ui
 
 def test_ui_no_node_prints_instructions(capsys):
     with patch("chi_llm.cli_modules.ui.which", return_value=None):
-        ui.cmd_ui(SimpleNamespace(source=None, branch=None, ui_args=[]))
+        ui.cmd_ui(SimpleNamespace(ui_args=[]))
     out = capsys.readouterr().out
     assert "Node.js (and npx) not found" in out
 
 
-def test_ui_runs_npx_with_source():
-    # Simulate node and npx being present
+def test_ui_runs_local_npm_commands(tmp_path, monkeypatch):
+    # Simulate node and npm present
     with patch(
-        "chi_llm.cli_modules.ui.which", side_effect=["/usr/bin/node", "/usr/bin/npx"]
+        "chi_llm.cli_modules.ui.which", side_effect=["/usr/bin/node", "/usr/bin/npm"]
     ):
+        # Prepare temp UI dir
+        ui_dir = tmp_path / "ui_frontend"
+        (ui_dir / "bin").mkdir(parents=True)
+        (ui_dir / "package.json").write_text(
+            '{"name":"x","version":"1.0.0","scripts":{"start":"node ./bin/index.js"}}'
+        )
+        (ui_dir / "bin/index.js").write_text('console.log("ok")')
+
+        # Patch resolver to return temp ui dir
+        monkeypatch.setattr(ui, "_get_ui_dir", lambda: ui_dir)
         with patch("subprocess.run") as run:
-            ui.cmd_ui(
-                SimpleNamespace(
-                    source="github:org/repo", branch="dev", ui_args=["--foo"]
-                )
-            )
-            # Expect npx to be invoked
-            called = run.call_args[0][0]
-            assert called[0].endswith("npx")
-            assert "github:org/repo#dev" in called
-            assert "--" in called
-            assert "--foo" in called
+            ui.cmd_ui(SimpleNamespace(ui_args=["--foo"]))
+            # Verify npm ci then npm run start -- --foo executed
+            assert run.call_count >= 2
+            first = run.call_args_list[0][0][0]
+            second = run.call_args_list[-1][0][0]
+            assert first[0].endswith("npm") and first[1] == "ci"
+            assert second[0].endswith("npm") and second[1:3] == ["run", "start"]

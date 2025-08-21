@@ -1,8 +1,9 @@
 """
 UI launcher command.
 
-Runs an Ink (Node.js) UI via npx. If Node/npx are not available, prints
-clear installation instructions for the current platform.
+Runs the bundled Ink (Node.js) UI from this repository. Requires Node.js.
+On first run, installs dependencies in the UI folder, then launches the UI.
+If Node.js is not available, prints clear installation instructions.
 """
 
 from argparse import _SubParsersAction
@@ -10,6 +11,7 @@ from shutil import which
 import subprocess
 import os
 import platform
+from pathlib import Path
 
 
 def _print_node_instructions():
@@ -32,35 +34,40 @@ def _print_node_instructions():
     print("\nAfter installation, try: chi-llm config")
 
 
+def _get_ui_dir() -> Path:
+    # Locate the bundled UI folder under the installed package
+    here = Path(__file__).resolve()
+    ui_dir = here.parent.parent / "ui_frontend"
+    return ui_dir
+
+
 def cmd_ui(args):
     node_path = which("node")
-    npx_path = which("npx")
+    npm_path = which("npm")
 
-    if not node_path or not npx_path:
+    if not node_path or not npm_path:
         _print_node_instructions()
         return
 
-    # Determine source spec for npx
-    source = getattr(args, "source", None) or os.environ.get(
-        "CHI_LLM_UI_SOURCE", "github:jacekjursza/chi_llm_ui"
-    )
-    branch = getattr(args, "branch", None) or os.environ.get(
-        "CHI_LLM_UI_BRANCH", "main"
-    )
-    if source.startswith("github:") and branch:
-        # Append #branch ref if not already present
-        if "#" not in source:
-            source = f"{source}#{branch}"
+    ui_dir = _get_ui_dir()
+    if not ui_dir.exists():
+        print("❌ UI assets are not bundled with this version.")
+        print("Please update chi-llm or consult the documentation.")
+        return
 
-    print("🚀 Launching chi-llm UI via npx...")
+    print("🚀 Launching chi-llm UI...")
     try:
-        # Pass-through any remaining args after '--'
+        # Install deps once (skip if node_modules exists)
+        node_modules = ui_dir / "node_modules"
+        if not node_modules.exists() and not os.environ.get("CHI_LLM_UI_SKIP_INSTALL"):
+            subprocess.run([npm_path, "ci"], cwd=str(ui_dir), check=False)
+
+        # Pass-through any remaining args
         ui_args = getattr(args, "ui_args", []) or []
-        cmd = [npx_path, "--yes", source]
+        cmd = [npm_path, "run", "start"]
         if ui_args:
-            cmd.append("--")
-            cmd.extend(ui_args)
-        subprocess.run(cmd, check=False)
+            cmd += ["--", *ui_args]
+        subprocess.run(cmd, cwd=str(ui_dir), check=False)
     except KeyboardInterrupt:
         print("\n👋 UI closed.")
     except Exception as e:
@@ -68,20 +75,6 @@ def cmd_ui(args):
 
 
 def _register_common(parser):
-    parser.add_argument(
-        "--source",
-        help=(
-            "npx package spec (default: github:jacekjursza/chi_llm_ui). "
-            "Can also be set via CHI_LLM_UI_SOURCE."
-        ),
-    )
-    parser.add_argument(
-        "--branch",
-        help=(
-            "Git ref for GitHub source (default: main). "
-            "Can also be set via CHI_LLM_UI_BRANCH."
-        ),
-    )
     parser.add_argument(
         "ui_args",
         nargs="*",
