@@ -91,6 +91,28 @@ class MicroLLM:
             # Fail closed: ignore provider config issues to preserve zero-config UX
             pass
 
+        # Honor per-project/global default model when explicitly configured
+        # via environment (CHI_LLM_MODEL) or config files discovered by ModelManager.
+        if self.model_id is None and HAS_MODEL_MANAGER:
+            try:
+                from .models import ModelManager  # local import to avoid cycles
+
+                manager = ModelManager()
+                has_env_model = bool(os.environ.get("CHI_LLM_MODEL"))
+                stats = manager.get_model_stats()
+                # Use manager only if a real config source exists or env model set
+                if has_env_model or stats.get("config_source") in {
+                    "local",
+                    "project",
+                    "global",
+                    "env",
+                    "custom",
+                }:
+                    self.model_id = manager.get_current_model().id
+            except Exception:
+                # If anything goes wrong, proceed with legacy fallback
+                pass
+
         self._ensure_model_loaded()
 
     def _ensure_model_loaded(self):

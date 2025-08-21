@@ -136,7 +136,10 @@ chi-llm setup
 ```python
 from chi_llm import MicroLLM
 
-# Uses configuration hierarchy automatically
+# Uses configuration hierarchy automatically:
+# - Honors per-project default_model from .chi_llm.json/.yaml
+# - Honors CHI_LLM_MODEL env var
+# - Falls back to built-in defaults when no config
 llm = MicroLLM()
 ```
 
