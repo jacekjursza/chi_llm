@@ -21,35 +21,73 @@ def cmd_setup(args):
     wizard.run()
 
 
+def _print_json(obj):
+    import json
+
+    print(json.dumps(obj, indent=2))
+
+
 def cmd_models(args):
     if not HAS_MODELS:
         print("❌ Model management not available")
         return
     manager = ModelManager()
     if args.models_command == "list":
-        print("📦 Available Models:\n")
-        current = manager.get_current_model()
-        for model in MODELS.values():
-            is_downloaded = manager.is_downloaded(model.id)
-            is_current = model.id == current.id
-            status = ""
-            if is_current:
-                status = " [CURRENT]"
-            elif is_downloaded:
-                status = " [Downloaded]"
-            print(f"• {model.name} ({model.size}){status}")
-            print(
-                "  ID: "
-                f"{model.id} | Size: {model.file_size_mb}MB | "
-                f"RAM: {model.recommended_ram_gb}GB"
-            )
-            print(f"  {model.description}\n")
+        if getattr(args, "json", False):
+            current = manager.get_current_model().id
+            out = []
+            for m in MODELS.values():
+                out.append(
+                    {
+                        "id": m.id,
+                        "name": m.name,
+                        "size": m.size,
+                        "file_size_mb": m.file_size_mb,
+                        "context_window": m.context_window,
+                        "recommended_ram_gb": m.recommended_ram_gb,
+                        "tags": m.tags,
+                        "downloaded": manager.is_downloaded(m.id),
+                        "current": m.id == current,
+                    }
+                )
+            _print_json(out)
+        else:
+            print("📦 Available Models:\n")
+            current = manager.get_current_model()
+            for model in MODELS.values():
+                is_downloaded = manager.is_downloaded(model.id)
+                is_current = model.id == current.id
+                status = ""
+                if is_current:
+                    status = " [CURRENT]"
+                elif is_downloaded:
+                    status = " [Downloaded]"
+                print(f"• {model.name} ({model.size}){status}")
+                print(
+                    "  ID: "
+                    f"{model.id} | Size: {model.file_size_mb}MB | "
+                    f"RAM: {model.recommended_ram_gb}GB"
+                )
+                print(f"  {model.description}\n")
     elif args.models_command == "current":
         current = manager.get_current_model()
         stats = manager.get_model_stats()
-        print(format_model_info(current, True, True))
-        print(f"\n📁 Config source: {stats['config_source']}")
-        print(f"   Path: {stats['config_path']}")
+        if getattr(args, "json", False):
+            _print_json(
+                {
+                    "id": current.id,
+                    "name": current.name,
+                    "size": current.size,
+                    "context_window": current.context_window,
+                    "downloaded": manager.is_downloaded(current.id),
+                    "config_source": stats.get("config_source"),
+                    "config_path": stats.get("config_path"),
+                }
+            )
+        else:
+            print(format_model_info(current, True, True))
+            print(f"\n📁 Config source: {stats['config_source']}")
+            print(f"   Path: {stats['config_path']}")
     elif args.models_command == "set":
         if args.model_id not in MODELS:
             print(f"❌ Unknown model: {args.model_id}")
@@ -84,8 +122,14 @@ def register(subparsers: _SubParsersAction):
     models_sub = models_parser.add_subparsers(
         dest="models_command", help="Model commands"
     )
-    models_sub.add_parser("list", help="List all available models")
-    models_sub.add_parser("current", help="Show current model")
+    list_parser = models_sub.add_parser("list", help="List all available models")
+    list_parser.add_argument(
+        "--json", action="store_true", help="Output machine-readable JSON"
+    )
+    cur_parser = models_sub.add_parser("current", help="Show current model")
+    cur_parser.add_argument(
+        "--json", action="store_true", help="Output machine-readable JSON"
+    )
     models_set = models_sub.add_parser("set", help="Set default model")
     models_set.add_argument("model_id", help="Model ID (e.g., phi3-mini, qwen3-1.7b)")
     models_set.add_argument(
