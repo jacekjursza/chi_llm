@@ -17,6 +17,26 @@ def cmd_setup(args):
     if not HAS_MODELS:
         print("❌ Model management not available")
         return
+    # Support subcommand: recommend
+    if getattr(args, "setup_command", None) == "recommend":
+        mgr = ModelManager()
+        model = mgr.recommend_model()
+        if getattr(args, "json", False):
+            _print_json(
+                {
+                    "id": model.id,
+                    "name": model.name,
+                    "size": model.size,
+                    "context_window": model.context_window,
+                    "recommended_ram_gb": model.recommended_ram_gb,
+                    "tags": model.tags,
+                }
+            )
+        else:
+            print("✅ Recommended model based on your system:\n")
+            print(format_model_info(model))
+        return
+    # Default interactive wizard
     wizard = SetupWizard()
     wizard.run()
 
@@ -109,13 +129,34 @@ def cmd_models(args):
         model = MODELS[args.model_id]
         is_downloaded = manager.is_downloaded(args.model_id)
         is_current = args.model_id == manager.get_current_model().id
-        print(format_model_info(model, is_downloaded, is_current))
+        if getattr(args, "json", False):
+            _print_json(
+                {
+                    "id": model.id,
+                    "name": model.name,
+                    "size": model.size,
+                    "file_size_mb": model.file_size_mb,
+                    "context_window": model.context_window,
+                    "recommended_ram_gb": model.recommended_ram_gb,
+                    "tags": model.tags,
+                    "downloaded": is_downloaded,
+                    "current": is_current,
+                }
+            )
+        else:
+            print(format_model_info(model, is_downloaded, is_current))
 
 
 def register(subparsers: _SubParsersAction):
     if not HAS_MODELS:
         return
     setup_parser = subparsers.add_parser("setup", help="Interactive model setup wizard")
+    setup_sub = setup_parser.add_subparsers(dest="setup_command")
+    # setup recommend --json
+    setup_reco = setup_sub.add_parser(
+        "recommend", help="Show recommended model for this system"
+    )
+    setup_reco.add_argument("--json", action="store_true", help="Output JSON")
     setup_parser.set_defaults(func=cmd_setup)
 
     models_parser = subparsers.add_parser("models", help="Model management")
@@ -137,4 +178,5 @@ def register(subparsers: _SubParsersAction):
     )
     models_info = models_sub.add_parser("info", help="Show model details")
     models_info.add_argument("model_id", help="Model ID")
+    models_info.add_argument("--json", action="store_true", help="Output JSON")
     models_parser.set_defaults(func=cmd_models)

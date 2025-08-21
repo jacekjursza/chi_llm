@@ -191,6 +191,39 @@ chi-llm template commit "Added login functionality and fixed bugs"
 - `commit` - Generate commit messages
 - `user-story` - Create user stories
 
+### 📦 `models` - Manage local models
+
+```bash
+# List all models (human-readable)
+chi-llm models list
+
+# JSON output for UI/automation
+chi-llm models list --json | jq '.[0]'
+
+# Show current model
+chi-llm models current
+chi-llm models current --json
+
+# Show details for a model
+chi-llm models info qwen3-1.7b
+chi-llm models info qwen3-1.7b --json
+
+# Set default model (must be downloaded)
+chi-llm models set qwen3-1.7b --local   # project only
+chi-llm models set phi3-mini            # global
+```
+
+### 🧰 `setup` - Setup and recommendation
+
+```bash
+# Interactive wizard (download and choose model)
+chi-llm setup
+
+# Show recommended model for this system
+chi-llm setup recommend
+chi-llm setup recommend --json | jq
+```
+
 ### 🧠 `rag` - RAG (Retrieval Augmented Generation)
 
 **Note:** Requires installation with `pip install chi-llm[rag]`
@@ -257,6 +290,20 @@ verbose: false
 
 ```bash
 export CHI_LLM_CONFIG=/path/to/config.yaml
+```
+
+### Config command and UI
+
+```bash
+# Open the interactive configuration UI (Ink/Node.js)
+chi-llm config
+
+# Read merged config as JSON
+chi-llm config get --json | jq
+
+# Set a config key (atomic write)
+chi-llm config set default_model qwen3-1.7b --scope local   # project
+chi-llm config set preferred_max_tokens 2048 --scope global # user
 ```
 
 ## Advanced Usage
