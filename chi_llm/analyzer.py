@@ -7,6 +7,7 @@ from typing import Optional
 from pathlib import Path
 from .core import MicroLLM
 from llama_cpp import Llama
+from .core import MODEL_DIR, MODEL_FILE, MODEL_REPO  # re-export constants for BC
 
 # For backward compatibility
 DEFAULT_QUESTION = "Describe what this code does and explain its main functionality."

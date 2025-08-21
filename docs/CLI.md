@@ -224,6 +224,23 @@ chi-llm setup recommend
 chi-llm setup recommend --json | jq
 ```
 
+### 🩺 `diagnostics` - Environment checks
+
+```bash
+# JSON summary (for UI/automation)
+chi-llm diagnostics --json | jq
+
+# Human-readable summary
+chi-llm diagnostics
+```
+
+Fields include:
+- python: version and implementation
+- node: node/npm presence
+- cache: cache path existence/writability
+- model: current model, available vs recommended RAM
+- network: basic reachability to Hugging Face
+
 ### 🧠 `rag` - RAG (Retrieval Augmented Generation)
 
 **Note:** Requires installation with `pip install chi-llm[rag]`
