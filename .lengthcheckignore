@@ -1,0 +1,2 @@
+# Paths or globs to ignore in file length checks
+chi_llm/cli.py

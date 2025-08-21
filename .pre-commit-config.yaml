@@ -1,0 +1,29 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        entry: black
+        language: system
+        types: [python]
+        args: ["-l", "88"]
+
+      - id: ruff
+        name: ruff
+        entry: ruff check
+        language: system
+        types: [python]
+        args: ["--fix"]
+
+      - id: check-file-lengths
+        name: Check file line counts <= 600
+        entry: python scripts/check_file_lengths.py
+        language: system
+        pass_filenames: true
+        files: "\\.(py)$"
+
+      - id: validate-commit-message
+        name: Validate commit message (Conventional + Card-Id/Refs)
+        entry: python scripts/validate_commit_msg.py
+        language: system
+        stages: [commit-msg]
