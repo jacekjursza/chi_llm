@@ -48,8 +48,11 @@ chi_llm requires Python 3.8+ and automatically manages model downloads.
 # Basic installation
 pip install git+https://github.com/jacekjursza/chi_llm.git
 
-# With RAG support  
+# With RAG support (FastEmbed only - recommended)
 pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[rag]"
+
+# RAG with sentence-transformers compatibility  
+pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[rag-st]"
 
 # Full installation (all features)
 pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[full]"
@@ -221,6 +224,8 @@ user_story = llm.generate(story_prompt)
 
 **New in v2.1!** Add knowledge base capabilities to your LLM with zero configuration.
 
+**Default embeddings:** FastEmbed with `intfloat/multilingual-e5-base` (280MB, 768 dims, 100+ languages 🌍)
+
 ### Quick RAG Example
 
 ```python
@@ -325,9 +330,9 @@ chi_llm looks for configuration in this order (highest priority first):
 2. **Local Project Config** (`.chi_llm.json` in current directory)
    ```json
    {
-     "default_model": "qwen2-1.5b",
-     "preferred_context": 8192,
-     "preferred_max_tokens": 2048
+     "default_model": "qwen3-1.7b",
+     "preferred_context": 32768,
+     "preferred_max_tokens": 4096
    }
    ```
 
@@ -339,9 +344,9 @@ chi_llm looks for configuration in this order (highest priority first):
    - Or `chi-llm setup`
 
 5. **Built-in Defaults**
-   - Model: gemma-270m (ultra-lightweight)
-   - Context: 8192 tokens
-   - Max tokens: 4096
+   - Model: gemma-270m (ultra-lightweight, 200MB)
+   - Context: 32,768 tokens (full model capacity)
+   - Max tokens: 4,096 (default response length)
 
 ### Managing Configuration
 
@@ -371,8 +376,31 @@ chi_llm now supports multiple models! Choose based on your needs:
 | Model | Size | RAM | Best For |
 |-------|------|-----|----------|
 | **Phi-3 Mini** | 3.8B | 5GB | Best quality, recommended for most users |
-| **Qwen2 1.5B** | 1.5B | 3GB | Best small model, great for edge devices |
+| **Qwen3 1.7B** | 1.7B | 3GB | Best small model with thinking mode |
+| **Liquid LFM2** | 1.2B | 2.5GB | Blazingly fast, excels at math & multilingual |
 | **Gemma 2 2B** | 2B | 4GB | Google's efficient model, good balance |
+
+### 🚀 New Cutting-Edge Models
+
+#### Long Context Models (256K tokens!)
+| Model | Size | RAM | Special Features |
+|-------|------|-----|-----------------|
+| **Qwen3 4B Thinking** | 4B | 5GB | Advanced reasoning with thinking capability |
+| **Qwen3 4B Instruct** | 4B | 5GB | Enhanced general capabilities |
+
+#### Specialized Coding Models
+| Model | Size | RAM | Best For |
+|-------|------|-----|----------|
+| **Qwen2.5 Coder 0.5B** | 0.5B | 1.5GB | IDE integration, instant completions |
+| **Qwen2.5 Coder 1.5B** | 1.5B | 2.5GB | Balanced coding assistant |
+| **Qwen2.5 Coder 3B** | 3B | 4GB | Complex coding tasks |
+| **Qwen2.5 Coder 7B** | 7B | 8GB | Professional development |
+
+#### Latest Additions
+| Model | Size | RAM | Special Features |
+|-------|------|-----|-----------------|
+| **DeepSeek R1 Distill** | 1.5B | 3GB | Distilled reasoning capabilities |
+| **Liquid LFM2** | 1.2B | 2.5GB | Hybrid CPU/GPU architecture |
 
 ### All Available Models
 
@@ -505,3 +533,19 @@ from chi_llm import MicroLLM
 llm = MicroLLM()
 print(llm.generate("Hello, World!"))
 ```
+### Project Bootstrap
+
+```bash
+# Scaffold config and env placeholders in current directory
+chi-llm bootstrap . --provider local --model-id qwen3-1.7b --extras none
+
+# Outputs:
+#  - .chi_llm.json       (project config; default_model for local)
+#  - .env.sample         (API keys / provider env placeholders)
+#  - llm-requirements.txt (minimal deps, extras optional)
+```
+
+Notes:
+- For external providers, use e.g. `--provider openai --model-id gpt-4o-mini`.
+- Copy `.env.sample` to `.env` and `source .env` (or use python-dotenv).
+- YAML config is available via `--yaml` (writes `.chi_llm.yaml`).
