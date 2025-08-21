@@ -17,7 +17,10 @@ setup(
     name="chi-llm",
     version="2.1.0",
     author="Jacek Jursza",
-    description="Zero Configuration Micro-LLM Library - The simplest way to add AI to your Python project",
+    description=(
+        "Zero Configuration Micro-LLM Library - The simplest way to add AI to "
+        "your Python project"
+    ),
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jacekjursza/chi_llm",
@@ -54,15 +57,25 @@ setup(
         # Full installation with all features
         "full": [
             "pyyaml>=6.0",
-            "sentence-transformers>=2.2.0",  # For embeddings
+            "fastembed>=0.3.0",  # Lightweight embeddings (preferred)
+            "sentence-transformers>=2.2.0",  # For embeddings fallback
             "sqlite-vec>=0.1.0",  # Vector store in SQLite
             "numpy>=1.21.0",  # For vector operations
             "tqdm>=4.65.0",  # Progress bars
         ],
-        # RAG-specific installation
+        # RAG-specific installation (FastEmbed only by default)
         "rag": [
             "pyyaml>=6.0",
-            "sentence-transformers>=2.2.0",
+            "fastembed>=0.3.0",  # Lightweight embeddings with multilingual support
+            "sqlite-vec>=0.1.0",
+            "numpy>=1.21.0",
+            "tqdm>=4.65.0",
+        ],
+        # RAG with sentence-transformers compatibility
+        "rag-st": [
+            "pyyaml>=6.0",
+            "fastembed>=0.3.0",
+            "sentence-transformers>=2.2.0",  # For compatibility with ST models
             "sqlite-vec>=0.1.0",
             "numpy>=1.21.0",
             "tqdm>=4.65.0",
@@ -83,6 +96,7 @@ setup(
     entry_points={
         "console_scripts": [
             "chi-llm=chi_llm.cli:main",
+            "chi=chi_llm.cli:main",
             "code-analyzer=chi_llm.cli:main",
             "gemma-analyze=chi_llm.cli:main",
         ],

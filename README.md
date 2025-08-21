@@ -548,4 +548,16 @@ chi-llm bootstrap . --provider local --model-id qwen3-1.7b --extras none
 Notes:
 - For external providers, use e.g. `--provider openai --model-id gpt-4o-mini`.
 - Copy `.env.sample` to `.env` and `source .env` (or use python-dotenv).
-- YAML config is available via `--yaml` (writes `.chi_llm.yaml`).
+ - YAML config is available via `--yaml` (writes `.chi_llm.yaml`).
+
+### UI (Ink)
+
+```bash
+# Run the interactive UI (requires Node.js + npx)
+chi ui
+
+# Custom source (e.g., GitHub repo with package.json + bin)
+chi ui --source github:jacekjursza/chi_llm_ui --branch main
+```
+
+If Node.js is not installed, the command prints platform-specific instructions.

@@ -5,7 +5,7 @@ Each module exposes a `register(subparsers)` function that
 adds its subcommands to the given `argparse._SubParsersAction`.
 """
 
-from . import basic, data, templates, rag, models, interactive, bootstrap
+from . import basic, data, templates, rag, models, interactive, bootstrap, ui
 
 
 def register_all(subparsers):
@@ -16,3 +16,4 @@ def register_all(subparsers):
     models.register(subparsers)
     interactive.register(subparsers)
     bootstrap.register(subparsers)
+    ui.register(subparsers)
