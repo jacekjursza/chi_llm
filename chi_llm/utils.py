@@ -9,50 +9,64 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 
+def _deep_merge(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge two dicts, with overrides taking precedence."""
+    for key, value in (overrides or {}).items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            base[key] = _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """
-    Load configuration from file or environment.
+    Load configuration with sensible precedence and deep-merge.
 
-    Looks for config in this order:
-    1. Provided config_path
-    2. .chi_llm.yaml in current directory
-    3. .chi_llm.json in current directory
-    4. CHI_LLM_CONFIG environment variable
-    5. Default configuration
+    Merge order (later overrides earlier):
+    1. Defaults
+    2. Provided config_path (if any)
+    3. Project files in CWD: .chi_llm.yaml/.yml/.json (first found)
+    4. CHI_LLM_CONFIG (file path or inline JSON) — always overrides
 
     Returns:
         Configuration dictionary
     """
-    # Default configuration
-    default_config = {
+    # 1) Defaults
+    config: Dict[str, Any] = {
         "model": {"temperature": 0.7, "max_tokens": 4096, "top_p": 0.95, "top_k": 40},
         "cache_dir": str(Path.home() / ".cache" / "chi_llm"),
         "verbose": False,
     }
 
-    # Try provided path
+    # 2) Explicit path
     if config_path and Path(config_path).exists():
-        return _load_file_config(config_path, default_config)
+        cfg = _load_file_config(config_path, {})
+        config = _deep_merge(config, cfg)
 
-    # Try current directory
+    # 3) Project file in CWD
     for filename in [".chi_llm.yaml", ".chi_llm.yml", ".chi_llm.json"]:
         if Path(filename).exists():
-            return _load_file_config(filename, default_config)
+            cfg = _load_file_config(filename, {})
+            config = _deep_merge(config, cfg)
+            break
 
-    # Try environment variable
-    env_config = os.environ.get("CHI_LLM_CONFIG")
-    if env_config:
-        if Path(env_config).exists():
-            return _load_file_config(env_config, default_config)
+    # 4) Environment override
+    env_cfg = os.environ.get("CHI_LLM_CONFIG")
+    if env_cfg:
+        if Path(env_cfg).exists():
+            cfg = _load_file_config(env_cfg, {})
+            config = _deep_merge(config, cfg)
         else:
-            # Try parsing as JSON
             try:
-                config = json.loads(env_config)
-                return {**default_config, **config}
+                cfg = json.loads(env_cfg)
+                if isinstance(cfg, dict):
+                    config = _deep_merge(config, cfg)
             except json.JSONDecodeError:
+                # Ignore invalid JSON in env var
                 pass
 
-    return default_config
+    return config
 
 
 def _load_file_config(filepath: str, defaults: Dict) -> Dict[str, Any]:
