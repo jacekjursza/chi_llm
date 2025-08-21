@@ -150,9 +150,13 @@ def cmd_config_set(args):
 
 
 def _register_common(parser):
+    # Collect any arguments after "--" and pass them to the UI
+    # Using REMAINDER avoids conflicts with subparsers.
+    import argparse as _argparse
+
     parser.add_argument(
         "ui_args",
-        nargs="*",
+        nargs=_argparse.REMAINDER,
         help="Arguments to pass through to the UI (after --)",
     )
     parser.set_defaults(func=cmd_ui)
