@@ -13,12 +13,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Model directory
-MODEL_DIR = Path.home() / '.cache' / 'chi_llm'
+MODEL_DIR = Path.home() / ".cache" / "chi_llm"
 
 
 @dataclass
 class ModelInfo:
     """Information about an available model."""
+
     id: str
     name: str
     size: str  # Human-readable size (e.g., "1.3B")
@@ -44,9 +45,8 @@ MODELS = {
         context_window=32768,
         description="Ultra-lightweight, fast inference, good for basic tasks",
         recommended_ram_gb=2.0,
-        tags=["tiny", "fast", "cpu-friendly", "default"]
+        tags=["tiny", "fast", "cpu-friendly", "default"],
     ),
-    
     # Small Qwen3 models
     "qwen3-0.6b": ModelInfo(
         id="qwen3-0.6b",
@@ -58,9 +58,8 @@ MODELS = {
         context_window=32768,
         description="Tiny but capable, supports thinking/non-thinking modes",
         recommended_ram_gb=1.5,
-        tags=["tiny", "versatile", "thinking-mode"]
+        tags=["tiny", "versatile", "thinking-mode"],
     ),
-    
     "qwen3-1.7b": ModelInfo(
         id="qwen3-1.7b",
         name="Qwen3 1.7B",
@@ -71,9 +70,8 @@ MODELS = {
         context_window=32768,
         description="Best performing model under 2B, thinking mode support",
         recommended_ram_gb=3.0,
-        tags=["small", "balanced", "recommended", "thinking-mode"]
+        tags=["small", "balanced", "recommended", "thinking-mode"],
     ),
-    
     "stablelm-2-1.6b": ModelInfo(
         id="stablelm-2-1.6b",
         name="StableLM 2 1.6B",
@@ -84,10 +82,9 @@ MODELS = {
         context_window=4096,
         description="Stable Diffusion's language model, good general performance",
         recommended_ram_gb=3.0,
-        tags=["small", "stable"]
+        tags=["small", "stable"],
     ),
-    
-    # 2B+ models  
+    # 2B+ models
     "gemma2-2b": ModelInfo(
         id="gemma2-2b",
         name="Gemma 2 2B",
@@ -98,9 +95,8 @@ MODELS = {
         context_window=8192,
         description="Google's efficient 2B model, great quality/size ratio",
         recommended_ram_gb=4.0,
-        tags=["medium", "google", "efficient"]
+        tags=["medium", "google", "efficient"],
     ),
-    
     "phi2-2.7b": ModelInfo(
         id="phi2-2.7b",
         name="Phi-2",
@@ -111,9 +107,8 @@ MODELS = {
         context_window=2048,
         description="Microsoft's small model, strong reasoning capabilities",
         recommended_ram_gb=4.0,
-        tags=["medium", "microsoft", "reasoning"]
+        tags=["medium", "microsoft", "reasoning"],
     ),
-    
     # 3B+ models
     "stablelm-3b": ModelInfo(
         id="stablelm-3b",
@@ -125,9 +120,8 @@ MODELS = {
         context_window=4096,
         description="Best performing 3B model, trained on 4 trillion tokens",
         recommended_ram_gb=4.0,
-        tags=["medium", "high-quality"]
+        tags=["medium", "high-quality"],
     ),
-    
     "phi3-mini": ModelInfo(
         id="phi3-mini",
         name="Phi-3 Mini",
@@ -138,9 +132,8 @@ MODELS = {
         context_window=4096,
         description="Microsoft's champion model, performs like 7B but runs like 3B",
         recommended_ram_gb=5.0,
-        tags=["large", "best-quality", "microsoft", "recommended"]
+        tags=["large", "best-quality", "microsoft", "recommended"],
     ),
-    
     # 4B models
     "qwen3-8b": ModelInfo(
         id="qwen3-8b",
@@ -152,9 +145,8 @@ MODELS = {
         context_window=32768,
         description="Latest Qwen3, excellent reasoning and multilingual support",
         recommended_ram_gb=9.0,
-        tags=["large", "multilingual", "latest", "thinking-mode"]
+        tags=["large", "multilingual", "latest", "thinking-mode"],
     ),
-    
     "gemma2-9b": ModelInfo(
         id="gemma2-9b",
         name="Gemma 2 9B (Q2_K)",
@@ -165,23 +157,21 @@ MODELS = {
         context_window=8192,
         description="Heavily quantized 9B model that runs like 4B",
         recommended_ram_gb=6.0,
-        tags=["large", "compressed", "powerful"]
+        tags=["large", "compressed", "powerful"],
     ),
-    
     # New blazingly fast models
     "liquid-lfm2-1.2b": ModelInfo(
         id="liquid-lfm2-1.2b",
         name="Liquid LFM2 1.2B",
         size="1.2B",
         file_size_mb=1250,
-        repo="liquid/lfm2-1.2b-gguf",
-        filename="lfm2-1.2b-Q8_0.gguf",
+        repo="LiquidAI/LFM2-1.2B-GGUF",
+        filename="LFM2-1.2B-Q8_0.gguf",
         context_window=32768,
         description="Blazingly fast hybrid architecture, excels at math & multilingual",
         recommended_ram_gb=2.5,
-        tags=["small", "fast", "multilingual", "math", "hybrid"]
+        tags=["small", "fast", "multilingual", "math", "hybrid"],
     ),
-    
     "deepseek-r1-qwen-1.5b": ModelInfo(
         id="deepseek-r1-qwen-1.5b",
         name="DeepSeek R1 Distill Qwen 1.5B",
@@ -192,9 +182,8 @@ MODELS = {
         context_window=32768,
         description="Distilled from DeepSeek R1, strong reasoning capabilities",
         recommended_ram_gb=3.0,
-        tags=["small", "reasoning", "distilled"]
+        tags=["small", "reasoning", "distilled"],
     ),
-    
     # Qwen3 thinking models
     "qwen3-4b-thinking": ModelInfo(
         id="qwen3-4b-thinking",
@@ -206,9 +195,8 @@ MODELS = {
         context_window=262144,  # 256K context!
         description="Advanced reasoning with thinking capability, 256K context",
         recommended_ram_gb=5.0,
-        tags=["medium", "reasoning", "thinking", "long-context", "256k"]
+        tags=["medium", "reasoning", "thinking", "long-context", "256k"],
     ),
-    
     "qwen3-4b": ModelInfo(
         id="qwen3-4b",
         name="Qwen3 4B Instruct 2507",
@@ -219,9 +207,8 @@ MODELS = {
         context_window=262144,  # 256K context!
         description="Enhanced general capabilities, 256K context",
         recommended_ram_gb=5.0,
-        tags=["medium", "general", "long-context", "256k"]
+        tags=["medium", "general", "long-context", "256k"],
     ),
-    
     # Qwen2.5-coder series
     "qwen2.5-coder-0.5b": ModelInfo(
         id="qwen2.5-coder-0.5b",
@@ -233,9 +220,8 @@ MODELS = {
         context_window=32768,
         description="Tiny coding assistant, perfect for IDE integration",
         recommended_ram_gb=1.5,
-        tags=["tiny", "coding", "fast", "ide"]
+        tags=["tiny", "coding", "fast", "ide"],
     ),
-    
     "qwen2.5-coder-1.5b": ModelInfo(
         id="qwen2.5-coder-1.5b",
         name="Qwen2.5 Coder 1.5B",
@@ -246,9 +232,8 @@ MODELS = {
         context_window=32768,
         description="Small but capable coding model",
         recommended_ram_gb=2.5,
-        tags=["small", "coding", "balanced"]
+        tags=["small", "coding", "balanced"],
     ),
-    
     "qwen2.5-coder-3b": ModelInfo(
         id="qwen2.5-coder-3b",
         name="Qwen2.5 Coder 3B",
@@ -259,9 +244,8 @@ MODELS = {
         context_window=32768,
         description="Powerful coding model with good performance",
         recommended_ram_gb=4.0,
-        tags=["medium", "coding", "powerful"]
+        tags=["medium", "coding", "powerful"],
     ),
-    
     "qwen2.5-coder-7b": ModelInfo(
         id="qwen2.5-coder-7b",
         name="Qwen2.5 Coder 7B",
@@ -272,14 +256,14 @@ MODELS = {
         context_window=32768,
         description="Professional-grade coding model, excellent for complex tasks",
         recommended_ram_gb=8.0,
-        tags=["large", "coding", "professional", "complex"]
-    )
+        tags=["large", "coding", "professional", "complex"],
+    ),
 }
 
 
 class ModelManager:
     """Manages model downloads and switching.
-    
+
     Configuration priority (highest to lowest):
     1. Environment variables (CHI_LLM_MODEL, CHI_LLM_CONFIG)
     2. Local project config (.chi_llm.json in current directory)
@@ -287,43 +271,43 @@ class ModelManager:
     4. Global user config (~/.cache/chi_llm/model_config.json)
     5. Default configuration
     """
-    
+
     def __init__(self, config_path: Optional[str] = None):
         self.config_paths = self._get_config_paths(config_path)
-        self.config_file = self.config_paths['global']  # For saving
+        self.config_file = self.config_paths["global"]  # For saving
         self.load_config()
-    
+
     def _get_config_paths(self, custom_path: Optional[str] = None) -> Dict[str, Path]:
         """Get all possible config paths in priority order."""
         paths = {}
-        
+
         # 1. Custom path if provided
         if custom_path:
-            paths['custom'] = Path(custom_path)
-        
+            paths["custom"] = Path(custom_path)
+
         # 2. Environment variable
-        if 'CHI_LLM_CONFIG' in os.environ:
-            paths['env'] = Path(os.environ['CHI_LLM_CONFIG'])
-        
+        if "CHI_LLM_CONFIG" in os.environ:
+            paths["env"] = Path(os.environ["CHI_LLM_CONFIG"])
+
         # 3. Local project config (current directory)
-        local_config = Path.cwd() / '.chi_llm.json'
+        local_config = Path.cwd() / ".chi_llm.json"
         if local_config.exists():
-            paths['local'] = local_config
-        
+            paths["local"] = local_config
+
         # 4. Project config (traverse up to find)
         current = Path.cwd()
         while current != current.parent:
-            project_config = current / '.chi_llm.json'
+            project_config = current / ".chi_llm.json"
             if project_config.exists():
-                paths['project'] = project_config
+                paths["project"] = project_config
                 break
             current = current.parent
-        
+
         # 5. Global user config
-        paths['global'] = MODEL_DIR / "model_config.json"
-        
+        paths["global"] = MODEL_DIR / "model_config.json"
+
         return paths
-    
+
     def load_config(self):
         """Load model configuration from multiple sources."""
         # Start with defaults
@@ -331,157 +315,163 @@ class ModelManager:
             "default_model": "gemma-270m",
             "downloaded_models": [],
             "preferred_context": 8192,
-            "preferred_max_tokens": 4096
+            "preferred_max_tokens": 4096,
         }
-        
+
         # Load configs in reverse priority (so higher priority overwrites)
-        config_sources = ['global', 'project', 'local', 'env', 'custom']
-        
+        config_sources = ["global", "project", "local", "env", "custom"]
+
         for source in config_sources:
             if source in self.config_paths:
                 config_path = self.config_paths[source]
                 if config_path.exists():
                     try:
-                        with open(config_path, 'r') as f:
+                        with open(config_path, "r") as f:
                             loaded = json.load(f)
                             # Merge configurations
                             self.config.update(loaded)
                             logger.debug(f"Loaded config from {source}: {config_path}")
                     except Exception as e:
                         logger.warning(f"Failed to load config from {config_path}: {e}")
-        
+
         # Environment variable overrides for specific settings
-        if 'CHI_LLM_MODEL' in os.environ:
-            model_id = os.environ['CHI_LLM_MODEL']
+        if "CHI_LLM_MODEL" in os.environ:
+            model_id = os.environ["CHI_LLM_MODEL"]
             if model_id in MODELS:
-                self.config['default_model'] = model_id
+                self.config["default_model"] = model_id
                 logger.debug(f"Using model from env: {model_id}")
-        
-        if 'CHI_LLM_CONTEXT' in os.environ:
+
+        if "CHI_LLM_CONTEXT" in os.environ:
             try:
-                self.config['preferred_context'] = int(os.environ['CHI_LLM_CONTEXT'])
+                self.config["preferred_context"] = int(os.environ["CHI_LLM_CONTEXT"])
             except ValueError:
                 pass
-        
-        if 'CHI_LLM_MAX_TOKENS' in os.environ:
+
+        if "CHI_LLM_MAX_TOKENS" in os.environ:
             try:
-                self.config['preferred_max_tokens'] = int(os.environ['CHI_LLM_MAX_TOKENS'])
+                self.config["preferred_max_tokens"] = int(
+                    os.environ["CHI_LLM_MAX_TOKENS"]
+                )
             except ValueError:
                 pass
-    
-    def save_config(self, target: str = 'global'):
+
+    def save_config(self, target: str = "global"):
         """Save model configuration.
-        
+
         Args:
             target: Where to save - 'global', 'local', or specific path
         """
-        if target == 'local':
-            save_path = Path.cwd() / '.chi_llm.json'
-        elif target == 'global':
+        if target == "local":
+            save_path = Path.cwd() / ".chi_llm.json"
+        elif target == "global":
             save_path = self.config_file
             MODEL_DIR.mkdir(parents=True, exist_ok=True)
         else:
             save_path = Path(target)
-        
-        with open(save_path, 'w') as f:
+
+        with open(save_path, "w") as f:
             json.dump(self.config, f, indent=2)
         logger.info(f"Saved config to {save_path}")
-    
+
     def get_current_model(self) -> ModelInfo:
         """Get currently selected model."""
         model_id = self.config.get("default_model", "gemma-270m")
         return MODELS[model_id]
-    
+
     def list_models(self, show_all: bool = False) -> List[ModelInfo]:
         """List available models."""
         if show_all:
             return list(MODELS.values())
-        
+
         # Filter by system capabilities
         available_ram = self._get_available_ram()
         suitable_models = []
-        
+
         for model in MODELS.values():
             if model.recommended_ram_gb <= available_ram:
                 suitable_models.append(model)
-        
+
         return suitable_models
-    
+
     def is_downloaded(self, model_id: str) -> bool:
         """Check if model is downloaded."""
         if model_id not in MODELS:
             return False
-        
+
         model = MODELS[model_id]
         model_path = MODEL_DIR / model.filename
         return model_path.exists()
-    
+
     def get_model_path(self, model_id: str) -> Optional[Path]:
         """Get path to downloaded model."""
         if not self.is_downloaded(model_id):
             return None
-        
+
         model = MODELS[model_id]
         return MODEL_DIR / model.filename
-    
-    def set_default_model(self, model_id: str, save_target: str = 'global'):
+
+    def set_default_model(self, model_id: str, save_target: str = "global"):
         """Set default model.
-        
+
         Args:
             model_id: Model ID to set as default
             save_target: Where to save - 'global', 'local', or path
         """
         if model_id not in MODELS:
             raise ValueError(f"Unknown model: {model_id}")
-        
+
         self.config["default_model"] = model_id
         self.save_config(save_target)
-    
+
     def mark_downloaded(self, model_id: str):
         """Mark model as downloaded."""
         if model_id not in self.config["downloaded_models"]:
             self.config["downloaded_models"].append(model_id)
             self.save_config()
-    
+
     def _get_available_ram(self) -> float:
         """Get available RAM in GB."""
         try:
             import psutil
+
             return psutil.virtual_memory().total / (1024**3)
         except ImportError:
             # Assume 8GB if psutil not available
             return 8.0
-    
+
     def get_download_info(self, model_id: str) -> Tuple[str, str]:
         """Get download info for a model (repo, filename)."""
         if model_id not in MODELS:
             raise ValueError(f"Unknown model: {model_id}")
-        
+
         model = MODELS[model_id]
         return model.repo, model.filename
-    
+
     def recommend_model(self) -> ModelInfo:
         """Recommend best model for system."""
         available_ram = self._get_available_ram()
-        
+
         # Find best model that fits in RAM
         best_model = MODELS["gemma-270m"]  # Default fallback
-        
+
         for model in MODELS.values():
-            if "recommended" in model.tags and model.recommended_ram_gb <= available_ram * 0.7:
+            if (
+                "recommended" in model.tags
+                and model.recommended_ram_gb <= available_ram * 0.7
+            ):
                 best_model = model
                 break
-        
+
         return best_model
-    
+
     def get_model_stats(self) -> Dict:
         """Get statistics about models."""
-        config_source = 'default'
-        for source in ['custom', 'env', 'local', 'project', 'global']:
+        config_source = "default"
+        for source in ["custom", "env", "local", "project", "global"]:
             if source in self.config_paths and self.config_paths[source].exists():
                 config_source = source
                 break
-        
+
         return {
             "total_models": len(MODELS),
             "downloaded": len([m for m in MODELS if self.is_downloaded(m)]),
@@ -489,18 +479,20 @@ class ModelManager:
             "available_ram_gb": self._get_available_ram(),
             "recommended_model": self.recommend_model().id,
             "config_source": config_source,
-            "config_path": str(self.config_paths.get(config_source, 'built-in'))
+            "config_path": str(self.config_paths.get(config_source, "built-in")),
         }
 
 
-def format_model_info(model: ModelInfo, is_downloaded: bool = False, is_current: bool = False) -> str:
+def format_model_info(
+    model: ModelInfo, is_downloaded: bool = False, is_current: bool = False
+) -> str:
     """Format model information for display."""
     status = ""
     if is_current:
         status = " [CURRENT]"
     elif is_downloaded:
         status = " [Downloaded]"
-    
+
     return f"""
 {model.name} ({model.size}){status}
   ID: {model.id}
@@ -517,8 +509,8 @@ def get_model_by_size(size_category: str) -> Optional[ModelInfo]:
         "tiny": "gemma-270m",
         "small": "qwen3-1.7b",
         "medium": "gemma2-2b",
-        "large": "phi3-mini"
+        "large": "phi3-mini",
     }
-    
+
     model_id = size_map.get(size_category.lower())
     return MODELS.get(model_id) if model_id else None
