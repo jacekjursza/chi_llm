@@ -35,20 +35,10 @@ Common use cases:
 """
 
 # New primary API
-from .core import (
-    MicroLLM,
-    quick_llm,
-    MODEL_REPO,
-    MODEL_FILE,
-    MODEL_DIR
-)
+from .core import MicroLLM, quick_llm, MODEL_REPO, MODEL_FILE, MODEL_DIR
 
 # Prompt templates
-from .prompts import (
-    PromptTemplates,
-    code_prompt,
-    data_prompt
-)
+from .prompts import PromptTemplates, code_prompt, data_prompt
 
 # Utilities
 from .utils import (
@@ -56,11 +46,19 @@ from .utils import (
     truncate_text,
     format_chat_history,
     clean_response,
-    get_model_info
+    get_model_info,
 )
 
 # Model registry helpers (programmatic access)
 from .models import ModelManager, MODELS, ModelInfo  # type: ignore
+
+# Backward compatibility imports kept near top to satisfy linters
+from .analyzer import (
+    CodeAnalyzer,
+    load_model,
+    analyze_code,
+    DEFAULT_QUESTION,
+)
 
 
 def list_available_models(show_all: bool = True):
@@ -76,13 +74,15 @@ def list_available_models(show_all: bool = True):
             downloaded = mgr.is_downloaded(m.id)
         except Exception:
             downloaded = False
-        out.append({
-            "id": m.id,
-            "name": m.name,
-            "size": m.size,
-            "context_window": m.context_window,
-            "downloaded": downloaded,
-        })
+        out.append(
+            {
+                "id": m.id,
+                "name": m.name,
+                "size": m.size,
+                "context_window": m.context_window,
+                "downloaded": downloaded,
+            }
+        )
     return out
 
 
@@ -95,15 +95,13 @@ def get_current_model_status():
     cur = mgr.get_current_model()
     downloaded = mgr.is_downloaded(cur.id)
     path = mgr.get_model_path(cur.id)
-    return {"id": cur.id, "name": cur.name, "downloaded": downloaded, "path": str(path or "")}
+    return {
+        "id": cur.id,
+        "name": cur.name,
+        "downloaded": downloaded,
+        "path": str(path or ""),
+    }
 
-# Backward compatibility
-from .analyzer import (
-    CodeAnalyzer,
-    load_model,
-    analyze_code,
-    DEFAULT_QUESTION
-)
 
 __version__ = "2.1.0"
 __author__ = "Jacek Jursza"
@@ -111,12 +109,10 @@ __all__ = [
     # Primary API
     "MicroLLM",
     "quick_llm",
-    
     # Prompts
     "PromptTemplates",
     "code_prompt",
     "data_prompt",
-    
     # Utils
     "load_config",
     "truncate_text",
@@ -129,15 +125,13 @@ __all__ = [
     "MODELS",
     "list_available_models",
     "get_current_model_status",
-    
     # Backward compatibility
     "CodeAnalyzer",
     "load_model",
     "analyze_code",
-    
     # Constants
     "MODEL_REPO",
     "MODEL_FILE",
     "MODEL_DIR",
-    "DEFAULT_QUESTION"
+    "DEFAULT_QUESTION",
 ]
