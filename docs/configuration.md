@@ -34,10 +34,10 @@ Perfect for:
 
 ```json
 {
-  "default_model": "qwen2-1.5b",
-  "preferred_context": 8192,
-  "preferred_max_tokens": 2048,
-  "downloaded_models": ["qwen2-1.5b", "phi3-mini"]
+  "default_model": "qwen3-1.7b",
+  "preferred_context": 32768,
+  "preferred_max_tokens": 4096,
+  "downloaded_models": ["qwen3-1.7b", "phi3-mini"]
 }
 ```
 
@@ -69,8 +69,8 @@ Benefits:
 ```json
 {
   "default_model": "gemma-270m",
-  "downloaded_models": ["gemma-270m", "phi3-mini", "qwen2-1.5b"],
-  "preferred_context": 8192,
+  "downloaded_models": ["gemma-270m", "phi3-mini", "qwen3-1.7b"],
+  "preferred_context": 32768,
   "preferred_max_tokens": 4096
 }
 ```
@@ -83,8 +83,8 @@ Set via:
 ### 5. Built-in Defaults (Lowest Priority)
 Zero-configuration defaults:
 - Model: `gemma-270m` (ultra-lightweight, 200MB)
-- Context: 8192 tokens
-- Max tokens: 4096
+- Context: 32,768 tokens (full model capacity)
+- Max tokens: 4,096 (default response length)
 - Temperature: 0.7
 
 ## CLI Configuration Management
@@ -148,7 +148,7 @@ llm = MicroLLM(model_id="phi3-mini")
 
 # Custom parameters
 llm = MicroLLM(
-    model_id="qwen2-1.5b",
+    model_id="qwen3-1.7b",
     temperature=0.3,
     max_tokens=2048
 )
@@ -184,9 +184,9 @@ export CHI_LLM_MAX_TOKENS=4096
 Shared team config (`.chi_llm.json` in repo):
 ```json
 {
-  "default_model": "qwen2-1.5b",
-  "preferred_context": 8192,
-  "preferred_max_tokens": 2048
+  "default_model": "qwen3-1.7b",
+  "preferred_context": 32768,
+  "preferred_max_tokens": 4096
 }
 ```
 
@@ -239,6 +239,51 @@ CMD ["python", "/app/main.py"]
 
 ## Troubleshooting
 
+## Provider Configuration (Draft)
+
+chi_llm supports multiple backends via a minimal provider abstraction. The default is local llama.cpp with GGUF models. You can declare a provider in config or via environment variables.
+
+### Config File
+
+YAML:
+```yaml
+provider:
+  type: local            # one of: local, lmstudio, ollama, openai, anthropic, groq, gemini
+  model: qwen3-1.7b      # backend-specific id (for local, matches MODELS registry)
+  host: localhost        # when relevant (e.g., LM Studio / Ollama / custom server)
+  port: 11434            # optional
+  api_key: ${API_KEY}    # for external providers (if needed)
+```
+
+JSON:
+```json
+{
+  "provider": {
+    "type": "local",
+    "model": "qwen3-1.7b",
+    "host": "localhost",
+    "port": 11434,
+    "api_key": "your-key-here"
+  }
+}
+```
+
+Notes:
+- If `type` is `local` and `model` is provided, `MicroLLM` uses it when `model_id` isn’t passed explicitly.
+- Non-local providers are added incrementally; using an unimplemented provider type will raise a clear runtime error once integrated.
+
+### Environment Variables
+
+```bash
+export CHI_LLM_PROVIDER_TYPE=local
+export CHI_LLM_PROVIDER_MODEL=qwen3-1.7b
+export CHI_LLM_PROVIDER_HOST=localhost
+export CHI_LLM_PROVIDER_PORT=11434
+export CHI_LLM_PROVIDER_API_KEY=sk-...
+```
+
+Environment variables override file configuration and are safe to use for CI/CD or local overrides.
+
 ### Check Config Source
 
 ```bash
@@ -270,13 +315,20 @@ Complete configuration file schema:
 
 ```json
 {
-  "default_model": "string (model ID)",
+  "default_model": "string (model ID, default: gemma-270m)",
   "downloaded_models": ["array", "of", "model", "ids"],
-  "preferred_context": "number (tokens)",
-  "preferred_max_tokens": "number (tokens)",
-  "temperature": "number (0.0-1.0, optional)",
+  "preferred_context": "number (tokens, default: 32768)",
+  "preferred_max_tokens": "number (tokens, default: 4096)",
+  "temperature": "number (0.0-1.0, optional, default: 0.7)",
   "top_p": "number (0.0-1.0, optional)",
-  "top_k": "number (optional)"
+  "top_k": "number (optional)",
+  "provider": {
+    "type": "string (local|lmstudio|ollama|openai|anthropic|groq|gemini)",
+    "model": "string (backend-specific id)",
+    "host": "string (optional)",
+    "port": "number|string (optional)",
+    "api_key": "string (optional)"
+  }
 }
 ```
 

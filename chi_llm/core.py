@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, List
 from threading import Lock
 from llama_cpp import Llama
+from .utils import load_config
 from huggingface_hub import hf_hub_download
 
 # Suppress llama.cpp warnings
@@ -72,6 +73,24 @@ class MicroLLM:
         self.verbose = verbose
         self.model_path = model_path
         self.model_id = model_id
+        # Provider-aware initialization (non-breaking):
+        # Loads optional provider config, but default behavior remains
+        # local llama.cpp unless an external provider is explicitly set.
+        self.provider_config: Dict[str, object] = {}
+        try:
+            cfg = load_config()
+            provider = cfg.get("provider") if isinstance(cfg, dict) else None
+            if isinstance(provider, dict) and provider.get("type"):
+                self.provider_config = provider
+                # If a local provider specifies model id and none was passed, use it
+                if provider.get("type") == "local" and not self.model_id:
+                    prov_model = provider.get("model")
+                    if isinstance(prov_model, str) and prov_model:
+                        self.model_id = prov_model
+        except Exception:
+            # Fail closed: ignore provider config issues to preserve zero-config UX
+            pass
+
         self._ensure_model_loaded()
 
     def _ensure_model_loaded(self):

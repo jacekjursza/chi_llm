@@ -37,6 +37,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         "model": {"temperature": 0.7, "max_tokens": 4096, "top_p": 0.95, "top_k": 40},
         "cache_dir": str(Path.home() / ".cache" / "chi_llm"),
         "verbose": False,
+        "provider": {},  # optional provider configuration
     }
 
     # 2) Explicit path
@@ -65,6 +66,37 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             except json.JSONDecodeError:
                 # Ignore invalid JSON in env var
                 pass
+
+    # Provider-specific environment overrides (always highest priority)
+    provider_type = os.environ.get("CHI_LLM_PROVIDER_TYPE")
+    if provider_type:
+        config.setdefault("provider", {})
+        config["provider"]["type"] = provider_type
+
+    provider_host = os.environ.get("CHI_LLM_PROVIDER_HOST")
+    if provider_host:
+        config.setdefault("provider", {})
+        config["provider"]["host"] = provider_host
+
+    provider_port = os.environ.get("CHI_LLM_PROVIDER_PORT")
+    if provider_port:
+        # store as int when possible
+        try:
+            port_int = int(provider_port)
+        except ValueError:
+            port_int = provider_port  # keep raw
+        config.setdefault("provider", {})
+        config["provider"]["port"] = port_int
+
+    provider_key = os.environ.get("CHI_LLM_PROVIDER_API_KEY")
+    if provider_key:
+        config.setdefault("provider", {})
+        config["provider"]["api_key"] = provider_key
+
+    provider_model = os.environ.get("CHI_LLM_PROVIDER_MODEL")
+    if provider_model:
+        config.setdefault("provider", {})
+        config["provider"]["model"] = provider_model
 
     return config
 
