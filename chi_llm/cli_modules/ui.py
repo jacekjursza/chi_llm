@@ -60,7 +60,22 @@ def cmd_ui(args):
         # Install deps once (skip if node_modules exists)
         node_modules = ui_dir / "node_modules"
         if not node_modules.exists() and not os.environ.get("CHI_LLM_UI_SKIP_INSTALL"):
-            subprocess.run([npm_path, "ci"], cwd=str(ui_dir), check=False)
+            # Prefer reproducible install when lockfile is present
+            lock_ci = (ui_dir / "package-lock.json").exists() or (
+                ui_dir / "npm-shrinkwrap.json"
+            ).exists()
+            if lock_ci:
+                subprocess.run(
+                    [npm_path, "ci", "--no-fund", "--no-audit"],
+                    cwd=str(ui_dir),
+                    check=False,
+                )
+            else:
+                subprocess.run(
+                    [npm_path, "install", "--no-fund", "--no-audit"],
+                    cwd=str(ui_dir),
+                    check=False,
+                )
 
         # Pass-through any remaining args
         ui_args = getattr(args, "ui_args", []) or []

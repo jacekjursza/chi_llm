@@ -32,9 +32,9 @@ def test_ui_runs_local_npm_commands(tmp_path, monkeypatch):
         monkeypatch.setattr(ui, "_get_ui_dir", lambda: ui_dir)
         with patch("subprocess.run") as run:
             ui.cmd_ui(SimpleNamespace(ui_args=["--foo"]))
-            # Verify npm ci then npm run start -- --foo executed
+            # Verify install step then npm run start -- --foo executed
             assert run.call_count >= 2
             first = run.call_args_list[0][0][0]
             second = run.call_args_list[-1][0][0]
-            assert first[0].endswith("npm") and first[1] == "ci"
+            assert first[0].endswith("npm") and first[1] in ("ci", "install")
             assert second[0].endswith("npm") and second[1:3] == ["run", "start"]
