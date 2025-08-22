@@ -40,17 +40,17 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
                 id="provider_select",
             )
 
-            # Body switches based on provider
-            with VerticalScroll(id="config_body"):
-                yield Static("Loading…")
-
-            # Actions footer (generic) — compact single row
+            # Actions row (compact) pinned above the body so it stays visible
             with Horizontal(id="actions_row"):
                 yield Static("Scope: local", id="scope_label")
                 yield Button("Toggle Scope", id="scope_toggle")
                 yield Button("Test Connection", id="test_conn")
                 yield Button("Build Config", id="build_config")
             yield Static("", id="status")
+
+            # Body switches based on provider
+            with VerticalScroll(id="config_body"):
+                yield Static("Loading…")
 
         def on_mount(self) -> None:  # type: ignore[override]
             self._render_body()
