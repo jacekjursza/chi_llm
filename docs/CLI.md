@@ -334,10 +334,10 @@ verbose: false
 export CHI_LLM_CONFIG=/path/to/config.yaml
 ```
 
-### Config command and UI
+### Config command and UI (Textual)
 
 ```bash
-# Open the interactive configuration UI (Ink/Node.js)
+# Open the interactive Textual UI
 chi-llm config
 
 # Read merged config as JSON

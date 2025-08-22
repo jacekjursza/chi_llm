@@ -552,13 +552,18 @@ Notes:
 - Copy `.env.sample` to `.env` and `source .env` (or use python-dotenv).
  - YAML config is available via `--yaml` (writes `.chi_llm.yaml`).
 
-### UI (Ink)
+### UI (Textual)
 
 ```bash
-# Run the interactive UI (requires Node.js)
-chi-llm config
+# Install the optional UI extra (recommended)
+pip install "chi-llm[ui]"    # or: pip install textual
 
-# UI is bundled with chi_llm and runs from the installed package directory.
+# Run the interactive TUI
+chi-llm config
 ```
 
-If Node.js is not installed, the command prints platform-specific instructions.
+Shortcuts:
+- `m` — Models list
+- `p` — Provider status
+- `d` — Diagnostics
+- `e` — Export diagnostics to `chi_llm_diagnostics.json`
