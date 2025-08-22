@@ -103,10 +103,13 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             ("s", "set_default", "Set Default"),
             ("x", "download", "Download"),
             ("o", "toggle_sort", "Sort"),
+            ("f", "focus_filter", "Focus Filter"),
+            ("l", "focus_list", "Focus List"),
         ]
 
         selected_id: Optional[str] = reactive(None)
         sort_mode: str = reactive("id")  # id | name | size | downloaded
+        downloading_model_id: Optional[str] = reactive(None)
 
         def compose(self) -> ComposeResult:  # type: ignore[override]
             with Vertical(id="left"):
@@ -123,8 +126,29 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             with Vertical(id="right"):
                 yield Label("Details")
                 yield Static("Select a model to see details.", id="details")
-                yield Static("Press [s]=Set, [x]=Download, [o]=Sort", id="hints")
+                yield Label("Actions & Status")
+                yield Static(
+                    "Press [s]=Set, [x]=Download, [o]=Sort, [l]=List, [f]=Filter",
+                    id="hints",
+                )
                 yield Static("Sort: id", id="sort_label")
+                yield Static("", id="progress")
+                yield Static("", id="op_msg")
+
+        def on_mount(self) -> None:  # type: ignore[override]
+            """Ensure the list has focus and an initial selection for arrow keys."""
+            try:
+                lv = self.query_one("#models_list")
+                self.set_focus(lv)
+                # Select first item if available
+                if hasattr(lv, "children") and lv.children:
+                    try:
+                        lv.index = 0  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+                self._update_details()
+            except Exception:
+                pass
 
         def _get_current_model(self) -> Optional[Dict[str, Any]]:
             lv = self.query_one("#models_list", ListView)
@@ -210,6 +234,18 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                 pass
             self.on_input_changed(None)  # type: ignore[arg-type]
 
+        def action_focus_filter(self) -> None:  # type: ignore[override]
+            try:
+                self.set_focus(self.query_one("#filter"))
+            except Exception:
+                pass
+
+        def action_focus_list(self) -> None:  # type: ignore[override]
+            try:
+                self.set_focus(self.query_one("#models_list"))
+            except Exception:
+                pass
+
         # Actions bound via BINDINGS
         def action_set_default(self) -> None:  # type: ignore[override]
             m = self._get_current_model()
@@ -275,14 +311,68 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             model_id = m.get("id")
             if not model_id:
                 return
+            # prevent parallel downloads
+            if self.downloading_model_id:
+                from textual.widgets import Static
+
+                self.query_one("#op_msg", Static).update(
+                    f"Already downloading: {self.downloading_model_id}. Please wait."
+                )
+                return
+            self.downloading_model_id = model_id
             right = self.query_one("#right")  # type: ignore
             from textual.widgets import Static
 
-            if not right.query("#op_msg"):
-                right.mount(Static("", id="op_msg"))
             right.query_one("#op_msg", Static).update(
                 "Downloading... this may take a while"
             )
+            # Start a progress loop (best-effort file size, fallback to pulse)
+            progress_stop = threading.Event()
+
+            expected_path = None
+            target_bytes = 0
+            try:
+                expected_path = store.expected_model_path(model_id)
+                mb = float(m.get("file_size_mb") or 0)
+                target_bytes = int(mb * 1024 * 1024)
+            except Exception:
+                expected_path = None
+                target_bytes = 0
+
+            def _progress_loop():
+                pos = 0
+                while not progress_stop.is_set():
+                    text = None
+                    if expected_path and target_bytes > 0 and expected_path.exists():
+                        try:
+                            size = expected_path.stat().st_size
+                            pct = min(99, int(size * 100 / max(target_bytes, 1)))
+                            bars = int(pct / 5)
+                            text = (
+                                "Progress: ["
+                                + "#" * bars
+                                + " " * (20 - bars)
+                                + f"] {pct}%"
+                            )
+                        except Exception:
+                            text = None
+                    if text is None:
+                        pos = (pos + 10) % 100
+                        bars = int(pos / 5)
+                        text = (
+                            "Progress: [" + "#" * bars + " " * (20 - bars) + f"] {pos}%"
+                        )
+
+                    def _upd():
+                        try:
+                            right.query_one("#progress", Static).update(text)
+                        except Exception:
+                            pass
+
+                    self.app.call_from_thread(_upd)
+                    progress_stop.wait(2.0)
+
+            threading.Thread(target=_progress_loop, daemon=True).start()
 
             def _worker():
                 try:
@@ -306,18 +396,24 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                                     )
                         except Exception:
                             pass
+                        progress_stop.set()
+                        right.query_one("#progress", Static).update("")
                         right.query_one("#op_msg", Static).update(
                             f"Downloaded {model_id} → {path}"
                         )
+                        self.downloading_model_id = None
 
                     self.app.call_from_thread(_ok)
                 except Exception as e:  # pragma: no cover - network dependent
                     e_msg = str(e)
 
                     def _err():
+                        progress_stop.set()
+                        right.query_one("#progress", Static).update("")
                         right.query_one("#op_msg", Static).update(
                             f"[red]Error:[/red] {e_msg}"
                         )
+                        self.downloading_model_id = None
 
                     self.app.call_from_thread(_err)
 

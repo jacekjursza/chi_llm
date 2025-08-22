@@ -157,6 +157,20 @@ class TUIStore:
         except Exception as e:  # pragma: no cover - network dependent
             raise RuntimeError(f"Failed to download model '{model_id}': {e}")
 
+    def expected_model_path(self, model_id: str) -> Path:
+        """Best-effort path where the model file will appear when downloaded.
+
+        Returns a Path under the configured MODEL_DIR joined with the model's
+        filename. Note: during download, some backends may write to temp files
+        and rename on completion; in that case this path may not exist until the
+        download finalizes.
+        """
+        from ..models import MODEL_DIR  # type: ignore
+
+        repo, filename = self._mgr.get_download_info(model_id)
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        return MODEL_DIR / filename
+
     # ----- Provider config API -----
     def get_provider(self) -> Dict[str, Any]:
         """Return normalized provider configuration from merged config.
