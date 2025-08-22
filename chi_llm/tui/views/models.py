@@ -8,10 +8,11 @@ user intents to the store layer (set default model, download model, etc.).
 from typing import List, Dict, Any, Optional
 
 
-def _format_model_row(m: Dict[str, Any]) -> str:
+def _format_model_row(m: Dict[str, Any], current_id: Optional[str] = None) -> str:
     mark = "✅" if m.get("downloaded") else "  "
+    star = "★" if current_id and m.get("id") == current_id else " "
     parts = [
-        f"{mark} {m.get('id')}",
+        f"{mark}{star} {m.get('id')}",
         f"{m.get('size', '')}",
         f"ctx={m.get('context_window', '?')}",
         f"RAM≈{m.get('recommended_ram_gb', '?')}GB",
@@ -26,13 +27,20 @@ def build_models_text(store) -> List[str]:
     without a terminal.
     """
     items = store.list_models(show_all=True)
-    rows = [_format_model_row(m) for m in items]
+    try:
+        current_id = store.get_current_model().get("id")
+    except Exception:
+        current_id = None
+    rows = [_format_model_row(m, current_id=current_id) for m in items]
     return rows
 
 
-def format_model_details(m: Dict[str, Any]) -> List[str]:
+def format_model_details(
+    m: Dict[str, Any], current_id: Optional[str] = None
+) -> List[str]:
     """Return a detailed multi-line description of a model for display."""
     tags = ", ".join(m.get("tags") or [])
+    is_default = bool(current_id and m.get("id") == current_id)
     return [
         f"ID: {m.get('id')}",
         f"Name: {m.get('name', '')}",
@@ -41,6 +49,7 @@ def format_model_details(m: Dict[str, Any]) -> List[str]:
         f"RAM (rec.): {m.get('recommended_ram_gb', '?')} GB",
         f"Tags: {tags}",
         f"Downloaded: {'yes' if m.get('downloaded') else 'no'}",
+        f"Default: {'yes' if is_default else 'no'}",
     ]
 
 
@@ -83,6 +92,10 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
 
     ctrl = ModelsController(store)
     models_cache: List[Dict[str, Any]] = ctrl.list()
+    try:
+        current_default_id: Optional[str] = store.get_current_model().get("id")
+    except Exception:
+        current_default_id = None
 
     class ModelsView(Horizontal):
         BINDINGS = [
@@ -97,7 +110,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                 yield Label("Models (✅ downloaded)")
                 lv = ListView(id="models_list")
                 for m in models_cache:
-                    row = _format_model_row(m)
+                    row = _format_model_row(m, current_id=current_default_id)
                     item = ListItem(Label(row))
                     item.data = m  # attach model dict
                     lv.append(item)
@@ -123,7 +136,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                 self.selected_id = None
                 return
             self.selected_id = str(d.get("id")) if d.get("id") else None
-            lines = format_model_details(d)
+            lines = format_model_details(d, current_id=current_default_id)
             details.update("\n".join(lines))
 
         # Events for selection/highlight changes
@@ -141,18 +154,55 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             model_id = m.get("id")
             if not model_id:
                 return
-            # Simple two-button confirm via in-place update
-            right = self.query_one("#right")  # type: ignore
-            try:
-                cur = ctrl.set_default(model_id, scope="local")
-                msg = f"Default set to {cur.get('id')} (local)."
-            except Exception as e:  # pragma: no cover - interactive path
-                msg = f"[red]Error:[/red] {e}"
-            from textual.widgets import Static
+            # Prompt for scope (local/global) via modal
+            from textual.widgets import Label, Button, Static
+            from textual.screen import ModalScreen
 
-            if not right.query("#op_msg"):
-                right.mount(Static("", id="op_msg"))
-            right.query_one("#op_msg", Static).update(msg)
+            class ScopeScreen(ModalScreen[None]):
+                def compose(self):  # type: ignore[override]
+                    yield Label(f"Set default: {model_id}")
+                    yield Button("Local", id="local")
+                    yield Button("Global", id="global")
+                    yield Button("Cancel", id="cancel")
+
+                def on_button_pressed(self, event):  # type: ignore[override]
+                    nonlocal current_default_id
+                    right = self.app.query_one("#right")  # type: ignore
+                    if event.button.id == "cancel":
+                        self.app.pop_screen()
+                        return
+                    scope = "local" if event.button.id == "local" else "global"
+                    try:
+                        cur = ctrl.set_default(model_id, scope=scope)
+                        current_default_id = cur.get("id")
+                        msg = f"Default set to {cur.get('id')} ({scope})."
+                        # refresh list labels with star
+                        lv = self.app.query_one("#models_list")  # type: ignore
+                        for item in lv.children:
+                            md = getattr(item, "data", None)
+                            if isinstance(md, dict):
+                                row = _format_model_row(
+                                    md, current_id=current_default_id
+                                )
+                                if item.children and hasattr(
+                                    item.children[0], "update"
+                                ):
+                                    item.children[0].update(row)
+                        # refresh details
+                        self.app.query_one("#details", Static).update(
+                            "\n".join(
+                                format_model_details(m, current_id=current_default_id)
+                            )
+                        )
+                    except Exception as e:  # pragma: no cover - interactive path
+                        msg = f"[red]Error:[/red] {e}"
+                    finally:
+                        if not right.query("#op_msg"):
+                            right.mount(Static("", id="op_msg"))
+                        right.query_one("#op_msg", Static).update(msg)
+                        self.app.pop_screen()
+
+            self.app.push_screen(ScopeScreen())
 
         def action_download(self) -> None:  # type: ignore[override]
             m = self._get_current_model()
@@ -165,6 +215,16 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             try:
                 path = ctrl.download(model_id)
                 msg = f"Downloaded {model_id} → {path}"
+                # update cache and current row label
+                if isinstance(m, dict):
+                    m["downloaded"] = True
+                lv = self.query_one("#models_list")  # type: ignore
+                if lv.index is not None and 0 <= lv.index < len(lv.children):
+                    item = lv.children[lv.index]
+                    if item.children:
+                        item.children[0].update(
+                            _format_model_row(m, current_id=current_default_id)
+                        )
             except Exception as e:  # pragma: no cover - interactive path
                 msg = f"[red]Error:[/red] {e}"
             from textual.widgets import Static
