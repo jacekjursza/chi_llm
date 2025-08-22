@@ -28,6 +28,11 @@ This document defines how agents work in this repository. General context: kmkkm
   - Done: move from In Progress to `docs/kanban/done/*.md` when finished. One feature = one file; small improvements count as separate files.
   - Note: Create these folders if missing; prefer English for all permanent docs.
 
+### Kanban Move Rules (Strict)
+- Start of work: move the card file from `docs/kanban/todo/` to `docs/kanban/inprogress/`.
+- Completion: move the card file from `docs/kanban/inprogress/` to `docs/kanban/done/` and remove any leftover copies from `todo/` and `inprogress/` (no duplicates across columns).
+- Followups: if you identify follow‑ups related to a card but decide to pick another task first, add a lightweight note in `docs/kanban/inprogress/<card_nr>.fallowup.md` capturing the context and defer it. Replace `<card_nr>` with the numeric prefix of the card.
+
 ## Execution Protocol
 - Start by creating/updating a TODO card with scope and acceptance criteria.
 - When starting, move the card to In Progress and keep it updated.
