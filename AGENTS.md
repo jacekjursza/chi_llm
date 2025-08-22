@@ -7,7 +7,10 @@ This document defines how agents work in this repository. General context: kmkkm
 - Agents may install Python packages required for correct app operation.
 - Agents may run shell commands related to running, developing, or maintaining the app.
 - Agents may write and run temporary Python scripts for testing and development.
-- GitHub access is available. Always ask for permission before pushing. If no repo exists, ask for project name and visibility (private/public) and then create it.
+- GitHub access is available.
+  - Early development (0 external users): push directly to `master` by default, no prior approval needed.
+  - Ask before force-pushing, rewriting history, or changing repository visibility.
+  - If no repo exists, ask for project name and visibility (private/public) and then create it.
 
 ## Communication & Language
 - Code, comments, and documentation are in English.
@@ -36,9 +39,15 @@ This document defines how agents work in this repository. General context: kmkkm
 ## Execution Protocol
 - Start by creating/updating a TODO card with scope and acceptance criteria.
 - When starting, move the card to In Progress and keep it updated.
-- On completion, move the card to Done and add a concise changelog entry.
 - Before moving to Done: run full test suite, format/lint as configured, update relevant docs, and prepare a commit.
-- Commit changes locally per atomic task (one feature/improvement per commit) with a clear message referencing the Kanban card. Ask for permission before pushing to remote.
+- On completion, move the card to Done and add a concise changelog entry.
+- Commit changes locally per atomic task (one feature/improvement per commit) with a clear message referencing the Kanban card.
+- Early development: push to `master` by default after successful validation. If policy changes later, switch to PR-based flow.
+
+### Branching & Pushing Policy
+- Default branch: `master`.
+- Push after each atomic, green task; avoid batching unrelated changes.
+- Avoid force-push; use PRs for risky changes or when collaborating externally.
 
 ## Commit Messages
 - Style: Conventional Commits.
