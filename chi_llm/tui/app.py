@@ -53,6 +53,8 @@ This is the new Textual-based TUI (MVP).
             ("p", "show_providers", "Providers"),
             ("d", "show_diagnostics", "Diagnostics"),
             ("e", "export_diagnostics", "Export Diag"),
+            ("s", "set_default_model", "Set Model"),
+            ("x", "download_model", "Download"),
         ]
 
         def compose(self) -> ComposeResult:  # type: ignore[override]
@@ -63,16 +65,14 @@ This is the new Textual-based TUI (MVP).
 
         def action_show_models(self) -> None:  # type: ignore[override]
             # Lazy import to keep Textual deps scoped
-            from textual.widgets import Static
             from .store import TUIStore
-            from .views.models import build_models_text
+            from .views.models import create_models_view
 
             store = TUIStore()
-            lines = build_models_text(store)
-            text = "\n".join(["[b]Models[/b] (✅ downloaded)", ""] + lines)
+            view = create_models_view(store)
             main = self.query_one("#main")  # type: ignore
             main.remove_children()
-            main.mount(Static(text))
+            main.mount(view)
 
         def action_show_providers(self) -> None:  # type: ignore[override]
             from textual.widgets import Static
@@ -133,6 +133,98 @@ This is the new Textual-based TUI (MVP).
             main = self.query_one("#main")  # type: ignore
             main.remove_children()
             main.mount(Static(f"Diagnostics exported to: {out}"))
+
+        # ----- Models interactive actions -----
+        def action_set_default_model(self) -> None:  # type: ignore[override]
+            """Prompt for model id and set as default (local/global)."""
+            from textual.widgets import Label, Input, Button
+            from textual.screen import ModalScreen
+            from .store import TUIStore
+
+            store = TUIStore()
+
+            class SetModelScreen(ModalScreen[None]):
+                def compose(self):  # type: ignore[override]
+                    yield Label("Set default model")
+                    yield Label("Model ID:")
+                    yield Input(placeholder="e.g. phi3-mini", id="model_id")
+                    yield Label("Scope:")
+                    yield Button("Set Local", id="set_local")
+                    yield Button("Set Global", id="set_global")
+                    yield Button("Cancel", id="cancel")
+
+                def on_button_pressed(self, event):  # type: ignore[override]
+                    from textual.widgets import Input
+
+                    model_id = self.query_one("#model_id", Input).value.strip()
+                    if event.button.id == "cancel":
+                        self.app.pop_screen()
+                        return
+                    scope = "local" if event.button.id == "set_local" else "global"
+                    main = self.app.query_one("#main")  # type: ignore
+                    try:
+                        from .views.models import ModelsController
+
+                        ctrl = ModelsController(store)
+                        cur = ctrl.set_default(model_id, scope=scope)
+                        msg = f"Default model set to {cur.get('id')} (scope={scope})."
+                        from textual.widgets import Static
+
+                        main.remove_children()
+                        main.mount(Static(msg))
+                    except Exception as e:  # pragma: no cover - interactive path
+                        from textual.widgets import Static
+
+                        main.remove_children()
+                        main.mount(Static(f"[red]Error:[/red] {e}"))
+                    finally:
+                        self.app.pop_screen()
+
+            self.push_screen(SetModelScreen())
+
+        def action_download_model(self) -> None:  # type: ignore[override]
+            """Prompt for model id and trigger download via store."""
+            from textual.widgets import Label, Input, Button
+            from textual.screen import ModalScreen
+            from .store import TUIStore
+
+            store = TUIStore()
+
+            class DownloadScreen(ModalScreen[None]):
+                def compose(self):  # type: ignore[override]
+                    yield Label("Download model")
+                    yield Label("Model ID:")
+                    yield Input(placeholder="e.g. phi3-mini", id="model_id")
+                    yield Button("Download", id="download")
+                    yield Button("Cancel", id="cancel")
+
+                def on_button_pressed(self, event):  # type: ignore[override]
+                    from textual.widgets import Input
+
+                    model_id = self.query_one("#model_id", Input).value.strip()
+                    if event.button.id == "cancel":
+                        self.app.pop_screen()
+                        return
+                    main = self.app.query_one("#main")  # type: ignore
+                    try:
+                        from .views.models import ModelsController
+
+                        ctrl = ModelsController(store)
+                        path = ctrl.download(model_id)
+                        msg = f"Model '{model_id}' downloaded to: {path}"
+                        from textual.widgets import Static
+
+                        main.remove_children()
+                        main.mount(Static(msg))
+                    except Exception as e:  # pragma: no cover - interactive path
+                        from textual.widgets import Static
+
+                        main.remove_children()
+                        main.mount(Static(f"[red]Error:[/red] {e}"))
+                    finally:
+                        self.app.pop_screen()
+
+            self.push_screen(DownloadScreen())
 
     app = ChiLLMConfigApp()
     # Note: App.run() blocks; tests mock `launch_tui` from CLI to avoid running a TUI.
