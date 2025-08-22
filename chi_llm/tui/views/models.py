@@ -132,6 +132,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                     id="hints",
                 )
                 yield Static("Sort: id", id="sort_label")
+                yield Static("Status: Idle", id="status_label")
                 yield Static("", id="progress")
                 yield Static("", id="op_msg")
 
@@ -315,6 +316,9 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             if self.downloading_model_id:
                 from textual.widgets import Static
 
+                self.query_one("#status_label", Static).update(
+                    f"Status: Downloading {self.downloading_model_id} (locked)"
+                )
                 self.query_one("#op_msg", Static).update(
                     f"Already downloading: {self.downloading_model_id}. Please wait."
                 )
@@ -323,6 +327,9 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             right = self.query_one("#right")  # type: ignore
             from textual.widgets import Static
 
+            right.query_one("#status_label", Static).update(
+                f"Status: Downloading {model_id} (locked)"
+            )
             right.query_one("#op_msg", Static).update(
                 "Downloading... this may take a while"
             )
@@ -401,6 +408,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                         right.query_one("#op_msg", Static).update(
                             f"Downloaded {model_id} → {path}"
                         )
+                        right.query_one("#status_label", Static).update("Status: Idle")
                         self.downloading_model_id = None
 
                     self.app.call_from_thread(_ok)
@@ -413,6 +421,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                         right.query_one("#op_msg", Static).update(
                             f"[red]Error:[/red] {e_msg}"
                         )
+                        right.query_one("#status_label", Static).update("Status: Idle")
                         self.downloading_model_id = None
 
                     self.app.call_from_thread(_err)
