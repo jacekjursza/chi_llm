@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 def create_config_view(store, initial_provider: Optional[str] = None) -> "object":
     from textual.app import ComposeResult
-    from textual.containers import Vertical, VerticalScroll
+    from textual.containers import Vertical, VerticalScroll, Horizontal
     from textual.widgets import Label, Button, Static, Input, Select
     from textual.reactive import reactive
 
@@ -44,11 +44,12 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
             with VerticalScroll(id="config_body"):
                 yield Static("Loading…")
 
-            # Actions footer (generic)
-            yield Static("Scope: local", id="scope_label")
-            yield Button("Toggle Scope", id="scope_toggle")
-            yield Button("Test Connection", id="test_conn")
-            yield Button("Build Config", id="build_config")
+            # Actions footer (generic) — compact single row
+            with Horizontal(id="actions_row"):
+                yield Static("Scope: local", id="scope_label")
+                yield Button("Toggle Scope", id="scope_toggle")
+                yield Button("Test Connection", id="test_conn")
+                yield Button("Build Config", id="build_config")
             yield Static("", id="status")
 
         def on_mount(self) -> None:  # type: ignore[override]
