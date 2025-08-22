@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import json
 
 
@@ -244,3 +244,28 @@ class TUIStore:
             "ok": True,
             "models_count": 0,
         }
+
+    # ----- Diagnostics API -----
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """Return environment diagnostics (delegates to diagnostics module)."""
+        try:
+            from ..cli_modules import diagnostics as diag  # type: ignore
+
+            if hasattr(diag, "_gather"):
+                return diag._gather()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        return {
+            "python": {"ok": True},
+            "node": {"ok": False},
+            "cache": {},
+            "model": {},
+            "network": {},
+        }
+
+    def export_diagnostics(self, path: Union[str, Path]) -> Path:
+        """Export diagnostics as JSON to the given path and return it."""
+        p = Path(path)
+        data = self.get_diagnostics()
+        _atomic_write_json(p, data)
+        return p

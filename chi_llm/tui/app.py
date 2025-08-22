@@ -51,6 +51,8 @@ This is the new Textual-based TUI (MVP).
             ("q", "quit", "Quit"),
             ("m", "show_models", "Models"),
             ("p", "show_providers", "Providers"),
+            ("d", "show_diagnostics", "Diagnostics"),
+            ("e", "export_diagnostics", "Export Diag"),
         ]
 
         def compose(self) -> ComposeResult:  # type: ignore[override]
@@ -88,6 +90,49 @@ This is the new Textual-based TUI (MVP).
             main = self.query_one("#main")  # type: ignore
             main.remove_children()
             main.mount(Static("\n".join(lines)))
+
+        def action_show_diagnostics(self) -> None:  # type: ignore[override]
+            from textual.widgets import Static
+            from .store import TUIStore
+
+            store = TUIStore()
+            d = store.get_diagnostics()
+            py = d.get("python", {})
+            node = d.get("node", {})
+            cache = d.get("cache", {})
+            model = d.get("model", {})
+            net = d.get("network", {})
+            lines = ["[b]Diagnostics[/b]"]
+            lines.append(
+                f"Python: {py.get('version','?')} ({py.get('implementation','?')})"
+            )
+            lines.append(f"Node: {'ok' if node.get('ok') else 'missing'}")
+            lines.append(
+                "Cache: "
+                f"{cache.get('path','?')} "
+                f"exists={cache.get('exists')} "
+                f"writable={cache.get('writable')}"
+            )
+            lines.append(
+                "Model: "
+                f"{model.get('current','?')} "
+                f"fits={'yes' if model.get('fits') else 'no'}"
+            )
+            lines.append(f"Network(HF): {'ok' if net.get('ok') else 'fail'}")
+            main = self.query_one("#main")  # type: ignore
+            main.remove_children()
+            main.mount(Static("\n".join(lines)))
+
+        def action_export_diagnostics(self) -> None:  # type: ignore[override]
+            from textual.widgets import Static
+            from .store import TUIStore
+            from pathlib import Path as _Path
+
+            store = TUIStore()
+            out = store.export_diagnostics(_Path.cwd() / "chi_llm_diagnostics.json")
+            main = self.query_one("#main")  # type: ignore
+            main.remove_children()
+            main.mount(Static(f"Diagnostics exported to: {out}"))
 
     app = ChiLLMConfigApp()
     # Note: App.run() blocks; tests mock `launch_tui` from CLI to avoid running a TUI.
