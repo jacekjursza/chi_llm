@@ -75,21 +75,14 @@ This is the new Textual-based TUI (MVP).
             main.mount(view)
 
         def action_show_providers(self) -> None:  # type: ignore[override]
-            from textual.widgets import Static
             from .store import TUIStore
+            from .views.providers import create_providers_view
 
             store = TUIStore()
-            prov = store.get_provider()
-            test = store.test_connection(prov)
-            lines = [
-                "[b]Provider[/b]",
-                f"Type: {prov.get('type')}",
-                f"Host: {prov.get('host')}:{prov.get('port')}",
-                f"OK: {test.get('ok')} (models={test.get('models_count', 0)})",
-            ]
+            view = create_providers_view(store)
             main = self.query_one("#main")  # type: ignore
             main.remove_children()
-            main.mount(Static("\n".join(lines)))
+            main.mount(view)
 
         def action_show_diagnostics(self) -> None:  # type: ignore[override]
             from textual.widgets import Static
