@@ -79,9 +79,20 @@ class MicroLLM:
         self.provider_config: Dict[str, object] = {}
         self._provider = None  # External provider instance when configured
         self._provider_type: Optional[str] = None
+        self._router = None  # Multi-provider router when configured
+        self.tags: Optional[List[str]] = None
         try:
             cfg = load_config()
             provider = cfg.get("provider") if isinstance(cfg, dict) else None
+            profiles = cfg.get("provider_profiles") if isinstance(cfg, dict) else None
+            # Initialize router if profiles are defined
+            if isinstance(profiles, list) and profiles:
+                try:
+                    from .providers.router import ProviderRouter
+
+                    self._router = ProviderRouter(profiles)
+                except Exception:
+                    self._router = None
             if isinstance(provider, dict) and provider.get("type"):
                 self.provider_config = provider
                 # If a local provider specifies model id and none was passed, use it
@@ -147,7 +158,7 @@ class MicroLLM:
                 pass
 
         # Load local model only when no external provider is configured
-        if self._provider is None:
+        if self._provider is None and self._router is None:
             self._ensure_model_loaded()
 
     def _ensure_model_loaded(self):
@@ -264,6 +275,11 @@ class MicroLLM:
             >>> llm.generate("Write a haiku about Python")
         """
         # If an external provider is configured, route to it
+        if self._router is not None:
+            try:
+                return self._router.generate(prompt, tags=self.tags, **kwargs)
+            except Exception as e:
+                raise RuntimeError(str(e))
         if self._provider is not None:
             try:
                 return self._provider.generate(prompt, **kwargs)
@@ -325,6 +341,11 @@ class MicroLLM:
             >>> response = llm.chat("And tomorrow?", history=[...])
         """
         # Route to external provider if configured
+        if self._router is not None:
+            try:
+                return self._router.chat(message, history=history, tags=self.tags)
+            except Exception as e:
+                raise RuntimeError(str(e))
         if self._provider is not None:
             try:
                 return self._provider.chat(message, history=history)
@@ -384,6 +405,11 @@ class MicroLLM:
             >>> llm.complete("The quick brown fox")
         """
         # Route to external provider if configured
+        if self._router is not None:
+            try:
+                return self._router.complete(text, tags=self.tags, **kwargs)
+            except Exception as e:
+                raise RuntimeError(str(e))
         if self._provider is not None:
             try:
                 return self._provider.complete(text, **kwargs)

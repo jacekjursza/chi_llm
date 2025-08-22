@@ -287,6 +287,43 @@ export CHI_LLM_PROVIDER_API_KEY=sk-...
 
 Environment variables override file configuration and are safe to use for CI/CD or local overrides.
 
+### Multiple Providers (Routing + Fallback)
+
+You can configure several providers and route by tags with fallback:
+
+YAML:
+```yaml
+provider_profiles:
+  - name: fast-coding
+    type: ollama
+    host: 127.0.0.1
+    port: 11434
+    model: llama3.2:latest
+    tags: [coding, fast]
+    priority: 5
+
+  - name: general-ui
+    type: lmstudio
+    host: 127.0.0.1
+    port: 1234
+    model: qwen2.5:latest
+    tags: [general]
+    priority: 10
+```
+
+In code, `MicroLLM` automatically uses the router when profiles are defined:
+```python
+from chi_llm import MicroLLM
+
+llm = MicroLLM()
+llm.tags = ["coding"]  # prefer providers tagged as coding
+print(llm.generate("Write a unit test for foo()"))
+```
+
+Behavior:
+- Router picks providers matching the tags first; lower `priority` runs earlier.
+- If a provider errors (e.g., not reachable), router falls back to the next.
+
 ### LM Studio
 
 LM Studio exposes an OpenAI-compatible local server (default `127.0.0.1:1234`).
@@ -395,7 +432,19 @@ Complete configuration file schema:
     "host": "string (optional)",
     "port": "number|string (optional)",
     "api_key": "string (optional)"
-  }
+  },
+  "provider_profiles": [
+    {
+      "name": "string",
+      "type": "string (lmstudio|ollama|...)",
+      "host": "string",
+      "port": "number|string",
+      "model": "string",
+      "tags": ["string", "..."],
+      "priority": "number (lower runs earlier)",
+      "timeout": "number (seconds, optional)"
+    }
+  ]
 }
 ```
 
