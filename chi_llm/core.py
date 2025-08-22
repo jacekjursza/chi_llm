@@ -1,6 +1,4 @@
-"""
-Core module for chi_llm - Zero Configuration Micro-LLM Library.
-"""
+"""Core module for chi_llm (micro-LLM)."""
 
 import os
 import warnings
@@ -35,17 +33,7 @@ _generation_lock = Lock()  # Protect model inference calls
 
 
 class MicroLLM:
-    """
-    Zero-configuration micro LLM for your Python projects.
-
-    Just import and use - no configuration needed!
-
-    Example:
-        >>> from chi_llm import MicroLLM
-        >>> llm = MicroLLM()
-        >>> response = llm.generate("Hello, how are you?")
-        >>> print(response)
-    """
+    """Zero‑config micro LLM with optional providers/router."""
 
     def __init__(
         self,
@@ -55,19 +43,7 @@ class MicroLLM:
         max_tokens: int = 4096,
         verbose: bool = False,
     ):
-        """
-        Initialize MicroLLM with zero configuration.
-
-        Args:
-            model_path: Optional custom model path (auto-downloads
-                if not provided)
-            model_id: Optional model ID from registry (e.g.,
-                'phi3-mini', 'qwen3-1.7b')
-            temperature: Creativity level (0.0 = deterministic,
-                1.0 = creative, default: 0.7)
-            max_tokens: Maximum response length (default: 4096)
-            verbose: Show model loading progress
-        """
+        """Initialize with optional model id/path and tuning params."""
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.verbose = verbose
@@ -79,6 +55,7 @@ class MicroLLM:
         self.provider_config: Dict[str, object] = {}
         self._provider = None  # External provider instance when configured
         self._provider_type: Optional[str] = None
+        self._provider_error: Optional[str] = None
         self._router = None  # Multi-provider router when configured
         self.tags: Optional[List[str]] = None
         try:
@@ -112,10 +89,11 @@ class MicroLLM:
                             timeout=float(provider.get("timeout", 30.0)),
                         )
                         self._provider_type = "lmstudio"
-                    except Exception:
-                        # Defer failure to first use to keep import cheap
+                    except Exception as e:
+                        # Defer failure: remember error and surface on use
                         self._provider = None
                         self._provider_type = "lmstudio"
+                        self._provider_error = str(e)
                 elif provider.get("type") == "ollama":
                     # Initialize Ollama provider; do not load local model
                     try:
@@ -128,9 +106,10 @@ class MicroLLM:
                             timeout=float(provider.get("timeout", 30.0)),
                         )
                         self._provider_type = "ollama"
-                    except Exception:
+                    except Exception as e:
                         self._provider = None
                         self._provider_type = "ollama"
+                        self._provider_error = str(e)
                 elif provider.get("type") == "openai":
                     # Initialize OpenAI provider; defer failures
                     try:
@@ -153,9 +132,42 @@ class MicroLLM:
                             timeout=float(provider.get("timeout", 30.0)),
                         )
                         self._provider_type = "openai"
-                    except Exception:
+                    except Exception as e:
                         self._provider = None
                         self._provider_type = "openai"
+                        self._provider_error = str(e)
+                elif provider.get("type") == "claude-cli":
+                    # Initialize Claude CLI provider
+                    try:
+                        from .providers.claude_cli import ClaudeCLIProvider
+
+                        self._provider = ClaudeCLIProvider(
+                            model=provider.get("model"),
+                            binary=str(provider.get("binary", "claude")),
+                            timeout=float(provider.get("timeout", 30.0)),
+                            args=provider.get("args"),
+                        )
+                        self._provider_type = "claude-cli"
+                    except Exception as e:
+                        self._provider = None
+                        self._provider_type = "claude-cli"
+                        self._provider_error = str(e)
+                elif provider.get("type") == "openai-cli":
+                    # Initialize OpenAI CLI provider
+                    try:
+                        from .providers.openai_cli import OpenAICLIProvider
+
+                        self._provider = OpenAICLIProvider(
+                            model=provider.get("model"),
+                            binary=str(provider.get("binary", "openai")),
+                            timeout=float(provider.get("timeout", 30.0)),
+                            args=provider.get("args"),
+                        )
+                        self._provider_type = "openai-cli"
+                    except Exception as e:
+                        self._provider = None
+                        self._provider_type = "openai-cli"
+                        self._provider_error = str(e)
         except Exception:
             # Fail closed: ignore provider config issues to preserve zero-config UX
             pass
@@ -187,7 +199,7 @@ class MicroLLM:
             self._ensure_model_loaded()
 
     def _ensure_model_loaded(self):
-        """Ensure the model is loaded using singleton pattern."""
+        """Load singleton llama.cpp model if not using provider/router."""
         global _model_instance, _model_lock
 
         if _model_instance is None:
@@ -199,7 +211,7 @@ class MicroLLM:
         self.llm = _model_instance
 
     def _download_model(self) -> str:
-        """Download model if not cached (happens only once)."""
+        """Download model if not cached (first run)."""
         # Always prefer legacy cached model if present
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
         legacy_model_path = MODEL_DIR / MODEL_FILE
@@ -258,7 +270,7 @@ class MicroLLM:
         return downloaded_path
 
     def _load_model(self, model_path: str) -> Llama:
-        """Load the model with optimized settings."""
+        """Load llama.cpp model with sensible defaults."""
         try:
             if self.verbose:
                 print("🤖 Loading model...")
@@ -285,20 +297,7 @@ class MicroLLM:
             raise RuntimeError(f"Failed to load model: {e}")
 
     def generate(self, prompt: str, **kwargs) -> str:
-        """
-        Generate text from a prompt.
-
-        Args:
-            prompt: Input text prompt
-            **kwargs: Override default parameters (temperature, max_tokens, etc.)
-                     Special: use_raw=True to skip Gemma formatting
-
-        Returns:
-            Generated text response
-
-        Example:
-            >>> llm.generate("Write a haiku about Python")
-        """
+        """Generate text for a prompt (provider/router aware)."""
         # If an external provider is configured, route to it
         if self._router is not None:
             try:
@@ -310,6 +309,13 @@ class MicroLLM:
                 return self._provider.generate(prompt, **kwargs)
             except Exception as e:
                 raise RuntimeError(str(e))
+        if self._provider_type is not None and self._provider is None:
+            # External provider configured but unavailable
+            hint = (
+                f"Provider '{self._provider_type}' is configured but not available. "
+                f"{self._provider_error or ''}"
+            ).strip()
+            raise RuntimeError(hint)
 
         # Check if we should use raw prompt (no formatting)
         use_raw = kwargs.pop("use_raw", False)
@@ -351,20 +357,7 @@ class MicroLLM:
             raise RuntimeError(f"Generation failed: {e}")
 
     def chat(self, message: str, history: Optional[List[Dict[str, str]]] = None) -> str:
-        """
-        Chat conversation with context.
-
-        Args:
-            message: User message
-            history: Optional conversation history
-
-        Returns:
-            AI response
-
-        Example:
-            >>> response = llm.chat("What's the weather like?")
-            >>> response = llm.chat("And tomorrow?", history=[...])
-        """
+        """Chat with optional history (provider/router aware)."""
         # Route to external provider if configured
         if self._router is not None:
             try:
@@ -376,6 +369,12 @@ class MicroLLM:
                 return self._provider.chat(message, history=history)
             except Exception as e:
                 raise RuntimeError(str(e))
+        if self._provider_type is not None and self._provider is None:
+            hint = (
+                f"Provider '{self._provider_type}' is configured but not available. "
+                f"{self._provider_error or ''}"
+            ).strip()
+            raise RuntimeError(hint)
 
         conversation = ""
 
@@ -416,19 +415,7 @@ class MicroLLM:
             raise RuntimeError(f"Chat failed: {e}")
 
     def complete(self, text: str, **kwargs) -> str:
-        """
-        Complete/continue the given text.
-
-        Args:
-            text: Text to complete
-            **kwargs: Override parameters
-
-        Returns:
-            Completed text
-
-        Example:
-            >>> llm.complete("The quick brown fox")
-        """
+        """Complete/continue text (provider/router aware)."""
         # Route to external provider if configured
         if self._router is not None:
             try:
@@ -440,6 +427,12 @@ class MicroLLM:
                 return self._provider.complete(text, **kwargs)
             except Exception as e:
                 raise RuntimeError(str(e))
+        if self._provider_type is not None and self._provider is None:
+            hint = (
+                f"Provider '{self._provider_type}' is configured but not available. "
+                f"{self._provider_error or ''}"
+            ).strip()
+            raise RuntimeError(hint)
 
         # For completion, we use a simpler format
         try:
@@ -456,21 +449,7 @@ class MicroLLM:
             raise RuntimeError(f"Completion failed: {e}")
 
     def ask(self, question: str, context: Optional[str] = None, **kwargs) -> str:
-        """
-        Ask a question, optionally with context.
-
-        Args:
-            question: Question to ask
-            context: Optional context for the question
-            **kwargs: Override parameters
-
-        Returns:
-            Answer to the question
-
-        Example:
-            >>> llm.ask("What is Python?")
-            >>> llm.ask("What's the main function?", context=code_snippet)
-        """
+        """Q&A helper; wraps generate with optional context."""
         if context:
             prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
         else:
@@ -479,16 +458,7 @@ class MicroLLM:
         return self.generate(prompt, **kwargs)
 
     def analyze(self, code: str, question: Optional[str] = None) -> str:
-        """
-        Analyze code (backward compatibility with CodeAnalyzer).
-
-        Args:
-            code: Code to analyze
-            question: Optional specific question
-
-        Returns:
-            Analysis result
-        """
+        """Quick code analysis helper (compat wrapper)."""
         if not question:
             question = "Analyze this code and explain what it does"
 
@@ -519,55 +489,19 @@ class MicroLLM:
         return self.generate(prompt, temperature=0.1)  # Low temperature for accuracy
 
     def summarize(self, text: str, max_sentences: int = 3) -> str:
-        """
-        Summarize text.
-
-        Args:
-            text: Text to summarize
-            max_sentences: Maximum sentences in summary
-
-        Returns:
-            Summary
-
-        Example:
-            >>> llm.summarize(long_article, max_sentences=2)
-        """
+        """Summarize text to N sentences."""
         prompt = (
             f"Summarize this text in {max_sentences} sentences:\n\n{text}\n\nSummary:"
         )
         return self.generate(prompt, temperature=0.3)
 
     def translate(self, text: str, target_language: str = "English") -> str:
-        """
-        Translate text to target language.
-
-        Args:
-            text: Text to translate
-            target_language: Target language
-
-        Returns:
-            Translated text
-
-        Example:
-            >>> llm.translate("Bonjour", "English")
-        """
+        """Translate text to the target language."""
         prompt = f"Translate this text to {target_language}:\n\n{text}\n\nTranslation:"
         return self.generate(prompt, temperature=0.1)
 
     def classify(self, text: str, categories: List[str]) -> str:
-        """
-        Classify text into categories.
-
-        Args:
-            text: Text to classify
-            categories: List of possible categories
-
-        Returns:
-            Best matching category
-
-        Example:
-            >>> llm.classify("I love this!", ["positive", "negative", "neutral"])
-        """
+        """Classify text into one of the given categories."""
         categories_str = ", ".join(categories)
         prompt = (
             "Classify this text into one of these categories "
@@ -576,16 +510,12 @@ class MicroLLM:
         return self.generate(prompt, temperature=0.1, max_tokens=50)
 
     def __call__(self, prompt: str, **kwargs) -> str:
-        """
-        Allow direct calling of the LLM.
-
-        Example:
-            >>> llm("Hello!")
-        """
+        """Alias for generate()."""
         return self.generate(prompt, **kwargs)
 
     def __repr__(self) -> str:
         return f"MicroLLM(model='{MODEL_FILE}', temperature={self.temperature})"
+
 
 # Convenience function for quick usage
 def quick_llm(prompt: str, **kwargs) -> str:

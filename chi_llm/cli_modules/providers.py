@@ -23,6 +23,8 @@ SUPPORTED = [
     {"type": "lmstudio", "implemented": True, "notes": "Local UI/server"},
     {"type": "ollama", "implemented": True, "notes": "Local server"},
     {"type": "openai", "implemented": True, "notes": "API key required"},
+    {"type": "claude-cli", "implemented": True, "notes": "Anthropic CLI bridge"},
+    {"type": "openai-cli", "implemented": True, "notes": "OpenAI CLI bridge"},
     {"type": "anthropic", "implemented": False},
     {"type": "groq", "implemented": False},
     {"type": "gemini", "implemented": False},
