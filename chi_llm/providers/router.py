@@ -112,5 +112,27 @@ def default_registry() -> Dict[str, Callable[[Dict[str, Any]], Any]]:
         )
     except Exception:
         pass
+    try:
+        from .openai import OpenAIProvider  # type: ignore
+
+        reg["openai"] = lambda prof: OpenAIProvider(
+            api_key=str(prof.get("api_key", "")),
+            model=prof.get("model"),
+            # allow custom endpoints via host as base_url
+            base_url=str(prof.get("base_url"))
+            if prof.get("base_url")
+            else (
+                str(prof.get("host"))
+                if str(prof.get("host", "")).startswith("http")
+                else None
+            ),
+            host=str(prof.get("host"))
+            if not str(prof.get("host", "")).startswith("http")
+            else None,
+            port=prof.get("port"),
+            timeout=float(prof.get("timeout", 30.0)),
+        )
+    except Exception:
+        pass
     # 'local' intentionally lacks factory here; handled by MicroLLM
     return reg

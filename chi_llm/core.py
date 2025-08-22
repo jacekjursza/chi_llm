@@ -131,6 +131,31 @@ class MicroLLM:
                     except Exception:
                         self._provider = None
                         self._provider_type = "ollama"
+                elif provider.get("type") == "openai":
+                    # Initialize OpenAI provider; defer failures
+                    try:
+                        from .providers.openai import OpenAIProvider
+
+                        self._provider = OpenAIProvider(
+                            api_key=str(provider.get("api_key", "")),
+                            model=provider.get("model"),
+                            base_url=str(provider.get("base_url"))
+                            if provider.get("base_url")
+                            else (
+                                str(provider.get("host"))
+                                if str(provider.get("host", "")).startswith("http")
+                                else None
+                            ),
+                            host=str(provider.get("host"))
+                            if not str(provider.get("host", "")).startswith("http")
+                            else None,
+                            port=provider.get("port"),
+                            timeout=float(provider.get("timeout", 30.0)),
+                        )
+                        self._provider_type = "openai"
+                    except Exception:
+                        self._provider = None
+                        self._provider_type = "openai"
         except Exception:
             # Fail closed: ignore provider config issues to preserve zero-config UX
             pass
@@ -561,7 +586,6 @@ class MicroLLM:
 
     def __repr__(self) -> str:
         return f"MicroLLM(model='{MODEL_FILE}', temperature={self.temperature})"
-
 
 # Convenience function for quick usage
 def quick_llm(prompt: str, **kwargs) -> str:
