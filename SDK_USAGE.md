@@ -389,6 +389,35 @@ See the `examples/` directory for complete working examples:
 - `basic_usage.py` - Simple usage examples
 - `integration_example.py` - Integration patterns for larger applications
 
+## Config Provider API (SDK)
+
+Use chi_llm as a lightweight configuration provider in your own apps.
+
+```python
+from chi_llm import load_config, resolve_model, get_provider_settings
+
+# Load merged configuration (defaults, file(s), env)
+cfg = load_config()  # or load_config("/path/to/.chi_llm.yaml")
+
+# Resolve effective local model selection
+eff = resolve_model()
+# eff => {"model_id": str, "model_path": str|None, "context_window": int, "source": str}
+
+# Get normalized provider settings for external integrations
+prov = get_provider_settings()
+# prov => {"type": "local|lmstudio|ollama|...", "model": str|None, "host": str, "port": int|str, "api_key": str|None}
+
+# Example: calling a local LM Studio server if configured
+if prov["type"] == "lmstudio":
+    base = f"http://{prov['host']}:{prov['port']}"
+    # ... use requests to call LM Studio's OpenAI-compatible endpoints ...
+```
+
+Notes:
+- `load_config()` respects the `CHI_LLM_CONFIG` env var (path or inline JSON) and provider env vars (e.g., `CHI_LLM_PROVIDER_*`).
+- `resolve_model()` uses the `ModelManager` precedence to determine the current model and whether it is downloaded.
+- `get_provider_settings()` defaults to `{"type": "local"}` and will infer `model` when not explicitly set.
+
 ## Support
 
 For issues or questions:

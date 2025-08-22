@@ -91,6 +91,8 @@ from chi_llm import quick_llm
 print(quick_llm("Write a haiku about Python"))
 ```
 
+For using chi_llm as a configuration provider in external apps, see the "Config Provider API (SDK)" section in `SDK_USAGE.md`.
+
 ### Basic Usage
 
 ```python

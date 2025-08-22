@@ -42,11 +42,15 @@ from .prompts import PromptTemplates, code_prompt, data_prompt
 
 # Utilities
 from .utils import (
-    load_config,
     truncate_text,
     format_chat_history,
     clean_response,
     get_model_info,
+)
+from .config import (
+    load_config as load_config,  # stable SDK import path
+    resolve_model,
+    get_provider_settings,
 )
 from .providers.discovery import list_provider_models  # type: ignore
 
@@ -120,6 +124,9 @@ __all__ = [
     "format_chat_history",
     "clean_response",
     "get_model_info",
+    # Config provider API
+    "resolve_model",
+    "get_provider_settings",
     # Registry helpers
     "ModelManager",
     "ModelInfo",
