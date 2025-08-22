@@ -112,14 +112,14 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             with Vertical(id="left"):
                 yield Label("Models (✅ downloaded)")
                 yield Input(placeholder="Filter by id/name/tag", id="filter")
-                lv = ListView(id="models_list")
-                # initial populate (no filter, default sort)
+                # Build items first; ListView.append can't be used before mount
+                list_items = []
                 for m in models_all:
                     row = _format_model_row(m, current_id=current_default_id)
                     item = ListItem(Label(row))
                     item.data = m  # attach model dict
-                    lv.append(item)
-                yield lv
+                    list_items.append(item)
+                yield ListView(*list_items, id="models_list")
             with Vertical(id="right"):
                 yield Label("Details")
                 yield Static("Select a model to see details.", id="details")
