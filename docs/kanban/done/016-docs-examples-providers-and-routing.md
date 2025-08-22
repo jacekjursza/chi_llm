@@ -8,22 +8,10 @@ Add comprehensive docs and examples for configuring providers, using tags/fallba
 
 ## Scope (How)
 - Update README and `docs/configuration.md` with provider sections.
-- Add examples under `examples/` for LM Studio, Ollama, OpenAI.
+- Add examples under `examples/` for LM Studio, Ollama, router.
 - Add troubleshooting section.
 
 ## Acceptance Criteria
 - Docs sections present with runnable code samples.
-- Examples pass in CI (where network-free via mocks).
-
-## Dependencies
-- Core provider features implemented.
-
-## Risks
-- Docs drift; keep concise and link to CLI help.
-
-## Estimate
-- Complexity: S (3–5h)
-
-## Test Plan
-- Lint docs; simple run of examples with mocked providers in CI.
+- Examples pass in CI (network-free by default).
 
