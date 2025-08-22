@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 def create_config_view(store, initial_provider: Optional[str] = None) -> "object":
     from textual.app import ComposeResult
     from textual.containers import Vertical, VerticalScroll
-    from textual.widgets import Label, Button, Static, Input
+    from textual.widgets import Label, Button, Static, Input, Select
     from textual.reactive import reactive
 
     from .models import create_models_view
@@ -28,10 +28,17 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
 
         def compose(self) -> ComposeResult:  # type: ignore[override]
             yield Label("Configuration")
-            # Provider selector row
-            yield Static(f"Provider: {self.current_type}", id="provider_label")
-            yield Button("Prev Type", id="type_prev")
-            yield Button("Next Type", id="type_next")
+            # Provider selector row (dropdown)
+            yield Static("Provider:")
+            yield Select(
+                options=[
+                    ("Local", "local"),
+                    ("LM Studio", "lmstudio"),
+                    ("Ollama", "ollama"),
+                ],
+                value=self.current_type,
+                id="provider_select",
+            )
 
             # Body switches based on provider
             with VerticalScroll(id="config_body"):
@@ -46,6 +53,15 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
 
         def on_mount(self) -> None:  # type: ignore[override]
             self._render_body()
+
+        # Handle provider select changes
+        def on_select_changed(self, event) -> None:  # type: ignore[override]
+            try:
+                v = getattr(event, "value", None)
+            except Exception:
+                v = None
+            if isinstance(v, str):
+                self._set_type(v)
 
         def _render_body(self) -> None:
             body = self.query_one("#config_body")
@@ -77,19 +93,12 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
                 body.mount(Label("Model (optional)"))
                 body.mount(Input(value=model, placeholder="model-id", id="model"))
 
-            # Update provider label
-            self.query_one("#provider_label", Static).update(
-                f"Provider: {self.current_type}"
-            )
+            # No label update needed; Select displays current value
 
-        def _cycle_type(self, direction: int) -> None:
-            types = ["local", "lmstudio", "ollama"]
-            try:
-                idx = types.index(self.current_type)
-            except ValueError:
-                idx = 0
-            self.current_type = types[(idx + direction) % len(types)]
-            self._render_body()
+        def _set_type(self, typ: str) -> None:
+            if typ in ("local", "lmstudio", "ollama"):
+                self.current_type = typ
+                self._render_body()
 
         def _read_form(self) -> Dict[str, Any]:
             # Only for external providers
@@ -122,12 +131,6 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
         def on_button_pressed(self, event) -> None:  # type: ignore[override]
             from textual.widgets import Static
 
-            if event.button.id == "type_prev":
-                self._cycle_type(-1)
-                return
-            if event.button.id == "type_next":
-                self._cycle_type(1)
-                return
             if event.button.id == "scope_toggle":
                 self.scope = "global" if self.scope == "local" else "local"
                 self.query_one("#scope_label", Static).update(f"Scope: {self.scope}")
