@@ -87,11 +87,12 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
     """
     from textual.app import ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import ListView, ListItem, Label, Static
+    from textual.widgets import ListView, ListItem, Label, Static, Input
     from textual.reactive import reactive
+    import threading
 
     ctrl = ModelsController(store)
-    models_cache: List[Dict[str, Any]] = ctrl.list()
+    models_all: List[Dict[str, Any]] = ctrl.list()
     try:
         current_default_id: Optional[str] = store.get_current_model().get("id")
     except Exception:
@@ -101,15 +102,19 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
         BINDINGS = [
             ("s", "set_default", "Set Default"),
             ("x", "download", "Download"),
+            ("o", "toggle_sort", "Sort"),
         ]
 
         selected_id: Optional[str] = reactive(None)
+        sort_mode: str = reactive("id")  # id | name | size | downloaded
 
         def compose(self) -> ComposeResult:  # type: ignore[override]
             with Vertical(id="left"):
                 yield Label("Models (✅ downloaded)")
+                yield Input(placeholder="Filter by id/name/tag", id="filter")
                 lv = ListView(id="models_list")
-                for m in models_cache:
+                # initial populate (no filter, default sort)
+                for m in models_all:
                     row = _format_model_row(m, current_id=current_default_id)
                     item = ListItem(Label(row))
                     item.data = m  # attach model dict
@@ -118,7 +123,8 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             with Vertical(id="right"):
                 yield Label("Details")
                 yield Static("Select a model to see details.", id="details")
-                yield Static("Press [s]=Set, [x]=Download", id="hints")
+                yield Static("Press [s]=Set, [x]=Download, [o]=Sort", id="hints")
+                yield Static("Sort: id", id="sort_label")
 
         def _get_current_model(self) -> Optional[Dict[str, Any]]:
             lv = self.query_one("#models_list", ListView)
@@ -145,6 +151,64 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
 
         def on_list_view_highlighted(self, _event) -> None:  # type: ignore[override]
             self._update_details()
+
+        def on_input_changed(self, _event) -> None:  # type: ignore[override]
+            """Filter models list based on text input."""
+            try:
+                q = self.query_one("#filter", Input).value.strip().lower()
+            except Exception:
+                q = ""
+            lv = self.query_one("#models_list", ListView)
+            try:
+                lv.clear()
+            except Exception:
+                # Fallback if ListView.clear not available
+                for child in list(lv.children):
+                    child.remove()
+
+            def match(m: Dict[str, Any]) -> bool:
+                if not q:
+                    return True
+                hay = " ".join(
+                    [
+                        str(m.get("id", "")),
+                        str(m.get("name", "")),
+                        " ".join(m.get("tags") or []),
+                    ]
+                ).lower()
+                return q in hay
+
+            # sorting helpers
+            def sort_key(m: Dict[str, Any]):
+                if self.sort_mode == "name":
+                    return (str(m.get("name", "")), str(m.get("id", "")))
+                if self.sort_mode == "size":
+                    return (int(m.get("file_size_mb", 0)), str(m.get("id", "")))
+                if self.sort_mode == "downloaded":
+                    return (0 if m.get("downloaded") else 1, str(m.get("id", "")))
+                return str(m.get("id", ""))
+
+            filtered_sorted = sorted(filter(match, models_all), key=sort_key)
+            for m in filtered_sorted:
+                row = _format_model_row(m, current_id=current_default_id)
+                item = ListItem(Label(row))
+                item.data = m
+                lv.append(item)
+            self._update_details()
+
+        def action_toggle_sort(self) -> None:  # type: ignore[override]
+            order = ["id", "name", "size", "downloaded"]
+            try:
+                idx = order.index(self.sort_mode)
+            except ValueError:
+                idx = 0
+            self.sort_mode = order[(idx + 1) % len(order)]
+            # trigger rebuild using current filter value
+            try:
+                self.query_one("#sort_label", Static).update(f"Sort: {self.sort_mode}")
+            except Exception:
+                pass
+            self.on_input_changed(None)  # type: ignore[arg-type]
 
         # Actions bound via BINDINGS
         def action_set_default(self) -> None:  # type: ignore[override]
@@ -212,25 +276,51 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             if not model_id:
                 return
             right = self.query_one("#right")  # type: ignore
-            try:
-                path = ctrl.download(model_id)
-                msg = f"Downloaded {model_id} → {path}"
-                # update cache and current row label
-                if isinstance(m, dict):
-                    m["downloaded"] = True
-                lv = self.query_one("#models_list")  # type: ignore
-                if lv.index is not None and 0 <= lv.index < len(lv.children):
-                    item = lv.children[lv.index]
-                    if item.children:
-                        item.children[0].update(
-                            _format_model_row(m, current_id=current_default_id)
-                        )
-            except Exception as e:  # pragma: no cover - interactive path
-                msg = f"[red]Error:[/red] {e}"
             from textual.widgets import Static
 
             if not right.query("#op_msg"):
                 right.mount(Static("", id="op_msg"))
-            right.query_one("#op_msg", Static).update(msg)
+            right.query_one("#op_msg", Static).update(
+                "Downloading... this may take a while"
+            )
+
+            def _worker():
+                try:
+                    path = ctrl.download(model_id)
+
+                    def _ok():
+                        # update flags and row
+                        if isinstance(m, dict):
+                            m["downloaded"] = True
+                        try:
+                            lv = self.query_one("#models_list")  # type: ignore
+                            if lv.index is not None and 0 <= lv.index < len(
+                                lv.children
+                            ):
+                                item = lv.children[lv.index]
+                                if item.children:
+                                    item.children[0].update(
+                                        _format_model_row(
+                                            m, current_id=current_default_id
+                                        )
+                                    )
+                        except Exception:
+                            pass
+                        right.query_one("#op_msg", Static).update(
+                            f"Downloaded {model_id} → {path}"
+                        )
+
+                    self.app.call_from_thread(_ok)
+                except Exception as e:  # pragma: no cover - network dependent
+                    e_msg = str(e)
+
+                    def _err():
+                        right.query_one("#op_msg", Static).update(
+                            f"[red]Error:[/red] {e_msg}"
+                        )
+
+                    self.app.call_from_thread(_err)
+
+            threading.Thread(target=_worker, daemon=True).start()
 
     return ModelsView()
