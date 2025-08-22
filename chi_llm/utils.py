@@ -25,8 +25,8 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
     Merge order (later overrides earlier):
     1. Defaults
-    2. Provided config_path (if any)
-    3. Project files in CWD: .chi_llm.yaml/.yml/.json (first found)
+    2. Project files in CWD: .chi_llm.yaml/.yml/.json (first found)
+    3. Provided config_path (if any) — explicit path should override project
     4. CHI_LLM_CONFIG (file path or inline JSON) — always overrides
 
     Returns:
@@ -40,17 +40,17 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         "provider": {},  # optional provider configuration
     }
 
-    # 2) Explicit path
-    if config_path and Path(config_path).exists():
-        cfg = _load_file_config(config_path, {})
-        config = _deep_merge(config, cfg)
-
-    # 3) Project file in CWD
+    # 2) Project file in CWD
     for filename in [".chi_llm.yaml", ".chi_llm.yml", ".chi_llm.json"]:
         if Path(filename).exists():
             cfg = _load_file_config(filename, {})
             config = _deep_merge(config, cfg)
             break
+
+    # 3) Explicit path (should override project)
+    if config_path and Path(config_path).exists():
+        cfg = _load_file_config(config_path, {})
+        config = _deep_merge(config, cfg)
 
     # 4) Environment override
     env_cfg = os.environ.get("CHI_LLM_CONFIG")

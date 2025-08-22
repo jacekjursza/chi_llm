@@ -206,7 +206,8 @@ class TUIStore:
         _atomic_write_json(target, existing)
         # Reload in-memory
         self._mgr.load_config()
-        return self.get_provider()
+        # Return what was just set (not merged) for deterministic UX/tests
+        return dict(provider)
 
     def test_connection(
         self, provider: Optional[Dict[str, Any]] = None

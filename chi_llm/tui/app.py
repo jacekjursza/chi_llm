@@ -66,20 +66,21 @@ This is the new Textual-based TUI (MVP).
         def action_show_models(self) -> None:  # type: ignore[override]
             # Lazy import to keep Textual deps scoped
             from .store import TUIStore
-            from .views.models import create_models_view
+            from .views.config import create_config_view
 
             store = TUIStore()
-            view = create_models_view(store)
+            # Open unified config with provider preselected to local
+            view = create_config_view(store, initial_provider="local")
             main = self.query_one("#main")  # type: ignore
             main.remove_children()
             main.mount(view)
 
         def action_show_providers(self) -> None:  # type: ignore[override]
             from .store import TUIStore
-            from .views.providers import create_providers_view
+            from .views.config import create_config_view
 
             store = TUIStore()
-            view = create_providers_view(store)
+            view = create_config_view(store)
             main = self.query_one("#main")  # type: ignore
             main.remove_children()
             main.mount(view)

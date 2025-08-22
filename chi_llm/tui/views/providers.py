@@ -76,9 +76,10 @@ Supported: local / lmstudio / ollama. Test, then Build config."""
             # Read current UI values
             from textual.widgets import Input
 
-            typ = self.query_one("#type_label", Label).renderable.plain.replace(
-                "Type: ", ""
-            )
+            lab = self.query_one("#type_label", Label)
+            rend = getattr(lab, "renderable", "")
+            txt = str(getattr(rend, "plain", rend))
+            typ = txt.replace("Type: ", "")
             host = self.query_one("#host", Input).value.strip() or "127.0.0.1"
             port_txt = self.query_one("#port", Input).value.strip()
             try:
@@ -93,9 +94,10 @@ Supported: local / lmstudio / ollama. Test, then Build config."""
 
             if event.button.id == "type_change":
                 # Cycle to next type
-                cur = self.query_one("#type_label", Label).renderable.plain.replace(
-                    "Type: ", ""
-                )
+                lab = self.query_one("#type_label", Label)
+                rend = getattr(lab, "renderable", "")
+                txt = str(getattr(rend, "plain", rend))
+                cur = txt.replace("Type: ", "")
                 try:
                     idx = self.supported_types.index(cur)
                 except ValueError:
