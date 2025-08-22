@@ -48,6 +48,7 @@ from .utils import (
     clean_response,
     get_model_info,
 )
+from .providers.discovery import list_provider_models  # type: ignore
 
 # Model registry helpers (programmatic access)
 from .models import ModelManager, MODELS, ModelInfo  # type: ignore
@@ -125,6 +126,7 @@ __all__ = [
     "MODELS",
     "list_available_models",
     "get_current_model_status",
+    "list_provider_models",
     # Backward compatibility
     "CodeAnalyzer",
     "load_model",

@@ -89,6 +89,27 @@ def cmd_models(args):
                     f"RAM: {model.recommended_ram_gb}GB"
                 )
                 print(f"  {model.description}\n")
+            # If an external provider is configured, show its local models too
+            try:
+                from ..utils import load_config
+                from ..providers.discovery import list_provider_models
+
+                cfg = load_config() or {}
+                prov = cfg.get("provider") or {}
+                ptype = prov.get("type")
+                if ptype in {"lmstudio", "ollama"}:
+                    plist = list_provider_models(prov)
+                    print(f"🔌 Provider models ({ptype}):\n")
+                    if not plist:
+                        print("  (none or provider not reachable)\n")
+                    else:
+                        for pm in plist:
+                            sz = f" [{pm['size']}]" if pm.get("size") else ""
+                            print(f"• {pm['name']}{sz}")
+                        print()
+            except Exception:
+                # Best-effort; ignore discovery errors in CLI
+                pass
     elif args.models_command == "current":
         current = manager.get_current_model()
         stats = manager.get_model_stats()
