@@ -1,0 +1,4 @@
+refactor(ui): drop Node UI
+
+Card-Id: 032
+Refs: docs/kanban/todo/032-tui-docs-changelog-deprecate-node-ui.md
