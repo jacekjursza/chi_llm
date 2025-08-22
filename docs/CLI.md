@@ -237,6 +237,8 @@ chi-llm providers current --json | jq
 
 # Set provider locally for this project
 chi-llm providers set lmstudio --host 127.0.0.1 --port 1234 --model qwen2.5:latest --local
+# Echo saved config as JSON (path + scope)
+chi-llm providers set ollama --host 127.0.0.1 --port 11434 --model llama3.2:latest --json | jq
 
 # Set provider globally (user config)
 chi-llm providers set ollama --host 127.0.0.1 --port 11434 --model llama3.2:latest

@@ -124,8 +124,22 @@ def cmd_providers(args):
                 existing = {}
         existing["provider"] = provider_cfg
         _atomic_write_json(target, existing)
-        # Intentionally silent to keep JSON-friendly pipelines when chained.
-        # The 'current' command provides confirmation/output.
+        scope = "local" if getattr(args, "local", False) else "global"
+        if getattr(args, "json", False):
+            _print_json(
+                {
+                    "provider": {
+                        "type": provider_cfg.get("type"),
+                        "host": provider_cfg.get("host"),
+                        "port": provider_cfg.get("port"),
+                        "model": provider_cfg.get("model"),
+                        "api_key_set": bool(provider_cfg.get("api_key")),
+                    },
+                    "scope": scope,
+                    "path": str(target),
+                }
+            )
+        # Otherwise remain silent to keep pipelines clean.
 
 
 def register(subparsers: _SubParsersAction):
@@ -146,3 +160,4 @@ def register(subparsers: _SubParsersAction):
     setp.add_argument("--model", help="Default model for the provider", default=None)
     setp.add_argument("--api-key", dest="api_key", help="API key (if required)")
     setp.add_argument("--local", action="store_true", help="Write to project config")
+    setp.add_argument("--json", action="store_true", help="Echo saved config as JSON")
