@@ -1,9 +1,11 @@
 """
 UI launcher command.
 
-Runs the bundled Ink (Node.js) UI from this repository. Requires Node.js.
-On first run, installs dependencies in the UI folder, then launches the UI.
-If Node.js is not available, prints clear installation instructions.
+Default: launch the Textual (Python) TUI when available.
+Legacy: launch the bundled Ink (Node.js) UI via --legacy-node.
+
+If Textual is not installed, print a concise install hint.
+If Node.js is selected and not available, print platform instructions.
 """
 
 from argparse import _SubParsersAction
@@ -13,6 +15,7 @@ import os
 import platform
 from pathlib import Path
 import json
+import importlib.util
 
 try:  # Import lazily to avoid heavy deps when not used
     from ..models import ModelManager
@@ -40,6 +43,14 @@ def _print_node_instructions():
     print("\nAfter installation, try: chi-llm config")
 
 
+def _print_textual_instructions():
+    print("❌ Textual UI is not installed.")
+    print("\nInstall it with one of:")
+    print("  • pip install 'chi-llm[ui]'")
+    print("  • pip install textual")
+    print("\nThen run: chi-llm config")
+
+
 def _get_ui_dir() -> Path:
     # Locate the bundled UI folder under the installed package
     here = Path(__file__).resolve()
@@ -47,7 +58,27 @@ def _get_ui_dir() -> Path:
     return ui_dir
 
 
+def _try_launch_textual(ui_args):
+    # Detect textual without importing our TUI module (keeps deps optional)
+    if importlib.util.find_spec("textual") is None:
+        _print_textual_instructions()
+        return
+    try:
+        from ..tui.app import launch_tui  # type: ignore
+
+        launch_tui(ui_args)
+    except Exception as e:
+        print(f"❌ Failed to launch Textual UI: {e}")
+        print("Tip: pip install 'chi-llm[ui]' to install the recommended version.")
+
+
 def cmd_ui(args):
+    # Prefer Textual unless legacy node is requested
+    if getattr(args, "legacy_node", False) is not True:
+        _try_launch_textual(getattr(args, "ui_args", []) or [])
+        return
+
+    # Legacy Node path below
     node_path = which("node")
     npm_path = which("npm")
 
@@ -61,7 +92,7 @@ def cmd_ui(args):
         print("Please update chi-llm or consult the documentation.")
         return
 
-    print("🚀 Launching chi-llm UI...")
+    print("🚀 Launching chi-llm (legacy Node) UI...")
     try:
         # Install deps once (skip if node_modules exists)
         node_modules = ui_dir / "node_modules"
@@ -165,7 +196,13 @@ def _register_common(parser):
 def register(subparsers: _SubParsersAction):
     # Preferred command name
     cfg = subparsers.add_parser(
-        "config", help="Open the interactive configuration UI (requires Node.js)"
+        "config",
+        help="Open the interactive configuration UI (Textual by default)",
+    )
+    cfg.add_argument(
+        "--legacy-node",
+        action="store_true",
+        help="Launch legacy Node.js UI instead of Textual",
     )
     # Subcommands for config management: get/set
     cfg_sub = cfg.add_subparsers(dest="config_command")
@@ -189,6 +226,11 @@ def register(subparsers: _SubParsersAction):
 
     # Alias for convenience/back-compat
     ui = subparsers.add_parser(
-        "ui", help="Run the Ink-based UI via npx (requires Node.js)"
+        "ui", help="Open the configuration UI (Textual by default)"
+    )
+    ui.add_argument(
+        "--legacy-node",
+        action="store_true",
+        help="Launch legacy Node.js UI instead of Textual",
     )
     _register_common(ui)
