@@ -143,7 +143,7 @@ Write-Host "  # See all options" -ForegroundColor Green
 Write-Host "  chi-llm --help" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Features:" -ForegroundColor Blue
-Write-Host "  🤖 9 curated models (270M to 9B parameters)"
+Write-Host "  🤖 18+ curated models (270M to 9B, including Qwen3 with thinking mode)"
 Write-Host "  🏠 100% local - no API keys needed"
 Write-Host "  ⚡ Zero configuration - works out of the box"
 Write-Host "  📁 Per-project configuration support"

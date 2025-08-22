@@ -2,12 +2,12 @@
 Pre-built prompt templates for common use cases.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 
 
 class PromptTemplates:
     """Collection of ready-to-use prompt templates."""
-    
+
     @staticmethod
     def code_review(code: str, language: Optional[str] = None) -> str:
         """Generate a code review prompt."""
@@ -22,7 +22,7 @@ Code:
 {code}
 
 Review:"""
-    
+
     @staticmethod
     def explain_code(code: str) -> str:
         """Generate a code explanation prompt."""
@@ -31,7 +31,7 @@ Review:"""
 {code}
 
 Explanation:"""
-    
+
     @staticmethod
     def fix_error(code: str, error: str) -> str:
         """Generate a bug fix prompt."""
@@ -44,7 +44,7 @@ Error message:
 {error}
 
 Please explain the issue and provide a fix:"""
-    
+
     @staticmethod
     def write_tests(code: str, framework: str = "pytest") -> str:
         """Generate unit tests for code."""
@@ -53,7 +53,7 @@ Please explain the issue and provide a fix:"""
 {code}
 
 Tests:"""
-    
+
     @staticmethod
     def optimize_code(code: str) -> str:
         """Generate optimization suggestions."""
@@ -62,7 +62,7 @@ Tests:"""
 {code}
 
 Optimized version with explanations:"""
-    
+
     @staticmethod
     def document_code(code: str, style: str = "docstring") -> str:
         """Generate documentation for code."""
@@ -71,7 +71,7 @@ Optimized version with explanations:"""
 {code}
 
 Documented code:"""
-    
+
     @staticmethod
     def sql_from_description(description: str) -> str:
         """Generate SQL from natural language."""
@@ -80,7 +80,7 @@ Documented code:"""
 {description}
 
 SQL query:"""
-    
+
     @staticmethod
     def regex_from_description(description: str) -> str:
         """Generate regex from description."""
@@ -89,7 +89,7 @@ SQL query:"""
 {description}
 
 Regex pattern with explanation:"""
-    
+
     @staticmethod
     def json_from_text(text: str, schema: Optional[Dict] = None) -> str:
         """Extract JSON from text."""
@@ -100,7 +100,7 @@ Text:
 {text}
 
 JSON:"""
-    
+
     @staticmethod
     def email_draft(context: str, tone: str = "professional") -> str:
         """Draft an email."""
@@ -109,7 +109,7 @@ JSON:"""
 {context}
 
 Email:"""
-    
+
     @staticmethod
     def meeting_notes(transcript: str) -> str:
         """Summarize meeting notes."""
@@ -122,7 +122,7 @@ Meeting Notes:
 - Action Items:
 - Decisions Made:
 - Next Steps:"""
-    
+
     @staticmethod
     def pros_cons(topic: str) -> str:
         """Generate pros and cons list."""
@@ -133,14 +133,14 @@ Pros:
 
 Cons:
 -"""
-    
+
     @staticmethod
     def explain_concept(concept: str, level: str = "beginner") -> str:
         """Explain a concept."""
         return f"""Explain {concept} for a {level} level audience:
 
 Explanation:"""
-    
+
     @staticmethod
     def creative_ideas(topic: str, count: int = 5) -> str:
         """Generate creative ideas."""
@@ -148,7 +148,7 @@ Explanation:"""
 
 Ideas:
 1."""
-    
+
     @staticmethod
     def refactor_code(code: str, goal: str = "cleaner and more maintainable") -> str:
         """Refactor code."""
@@ -158,7 +158,7 @@ Original code:
 {code}
 
 Refactored code:"""
-    
+
     @staticmethod
     def api_from_description(description: str) -> str:
         """Design API from description."""
@@ -168,7 +168,7 @@ Refactored code:"""
 
 API Design:
 Endpoints:"""
-    
+
     @staticmethod
     def user_story(feature: str) -> str:
         """Create user story."""
@@ -181,7 +181,7 @@ So that [benefit].
 
 Acceptance Criteria:
 -"""
-    
+
     @staticmethod
     def commit_message(changes: str) -> str:
         """Generate commit message."""
@@ -190,7 +190,7 @@ Acceptance Criteria:
 {changes}
 
 Commit message:"""
-    
+
     @staticmethod
     def cli_command(task: str, tool: Optional[str] = None) -> str:
         """Generate CLI command."""
@@ -204,25 +204,25 @@ Command:"""
 def code_prompt(code: str, task: str = "explain") -> str:
     """
     Generate appropriate prompt for code-related tasks.
-    
+
     Args:
         code: The code to analyze
         task: Task type (explain, review, optimize, document, test)
-    
+
     Returns:
         Formatted prompt string
     """
     templates = PromptTemplates()
-    
+
     task_map = {
         "explain": templates.explain_code,
         "review": templates.code_review,
         "optimize": templates.optimize_code,
         "document": templates.document_code,
         "test": templates.write_tests,
-        "refactor": templates.refactor_code
+        "refactor": templates.refactor_code,
     }
-    
+
     if task in task_map:
         return task_map[task](code)
     else:
@@ -232,11 +232,11 @@ def code_prompt(code: str, task: str = "explain") -> str:
 def data_prompt(data: str, task: str = "extract") -> str:
     """
     Generate appropriate prompt for data-related tasks.
-    
+
     Args:
         data: The data to process
         task: Task type (extract, summarize, classify)
-    
+
     Returns:
         Formatted prompt string
     """

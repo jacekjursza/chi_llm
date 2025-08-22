@@ -77,6 +77,8 @@ class MicroLLM:
         # Loads optional provider config, but default behavior remains
         # local llama.cpp unless an external provider is explicitly set.
         self.provider_config: Dict[str, object] = {}
+        self._provider = None  # External provider instance when configured
+        self._provider_type: Optional[str] = None
         try:
             cfg = load_config()
             provider = cfg.get("provider") if isinstance(cfg, dict) else None
@@ -87,6 +89,37 @@ class MicroLLM:
                     prov_model = provider.get("model")
                     if isinstance(prov_model, str) and prov_model:
                         self.model_id = prov_model
+                elif provider.get("type") == "lmstudio":
+                    # Initialize LM Studio provider; do not load local model
+                    try:
+                        from .providers.lmstudio import LmStudioProvider
+
+                        self._provider = LmStudioProvider(
+                            host=str(provider.get("host", "127.0.0.1")),
+                            port=provider.get("port", 1234),
+                            model=provider.get("model"),
+                            timeout=float(provider.get("timeout", 30.0)),
+                        )
+                        self._provider_type = "lmstudio"
+                    except Exception:
+                        # Defer failure to first use to keep import cheap
+                        self._provider = None
+                        self._provider_type = "lmstudio"
+                elif provider.get("type") == "ollama":
+                    # Initialize Ollama provider; do not load local model
+                    try:
+                        from .providers.ollama import OllamaProvider
+
+                        self._provider = OllamaProvider(
+                            host=str(provider.get("host", "127.0.0.1")),
+                            port=provider.get("port", 11434),
+                            model=provider.get("model"),
+                            timeout=float(provider.get("timeout", 30.0)),
+                        )
+                        self._provider_type = "ollama"
+                    except Exception:
+                        self._provider = None
+                        self._provider_type = "ollama"
         except Exception:
             # Fail closed: ignore provider config issues to preserve zero-config UX
             pass
@@ -113,7 +146,9 @@ class MicroLLM:
                 # If anything goes wrong, proceed with legacy fallback
                 pass
 
-        self._ensure_model_loaded()
+        # Load local model only when no external provider is configured
+        if self._provider is None:
+            self._ensure_model_loaded()
 
     def _ensure_model_loaded(self):
         """Ensure the model is loaded using singleton pattern."""
@@ -228,6 +263,13 @@ class MicroLLM:
         Example:
             >>> llm.generate("Write a haiku about Python")
         """
+        # If an external provider is configured, route to it
+        if self._provider is not None:
+            try:
+                return self._provider.generate(prompt, **kwargs)
+            except Exception as e:
+                raise RuntimeError(str(e))
+
         # Check if we should use raw prompt (no formatting)
         use_raw = kwargs.pop("use_raw", False)
 
@@ -282,6 +324,13 @@ class MicroLLM:
             >>> response = llm.chat("What's the weather like?")
             >>> response = llm.chat("And tomorrow?", history=[...])
         """
+        # Route to external provider if configured
+        if self._provider is not None:
+            try:
+                return self._provider.chat(message, history=history)
+            except Exception as e:
+                raise RuntimeError(str(e))
+
         conversation = ""
 
         if history:
@@ -334,6 +383,13 @@ class MicroLLM:
         Example:
             >>> llm.complete("The quick brown fox")
         """
+        # Route to external provider if configured
+        if self._provider is not None:
+            try:
+                return self._provider.complete(text, **kwargs)
+            except Exception as e:
+                raise RuntimeError(str(e))
+
         # For completion, we use a simpler format
         try:
             # Use lock to ensure thread-safe model access

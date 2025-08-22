@@ -95,7 +95,7 @@ echo   # See all options
 echo   chi-llm --help
 echo.
 echo Features:
-echo   - 9 curated models (270M to 9B parameters)
+echo   - 18+ curated models (270M to 9B, including Qwen3 with thinking mode)
 echo   - 100%% local - no API keys needed
 echo   - Zero configuration - works out of the box
 echo   - Per-project configuration support

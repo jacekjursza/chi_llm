@@ -11,10 +11,10 @@ def example_simple_analysis():
     print("=" * 60)
     print("Example 1: Simple Analysis")
     print("=" * 60)
-    
+
     # Initialize the analyzer
     analyzer = CodeAnalyzer()
-    
+
     # Simple Python code to analyze
     code = """
 def fibonacci(n):
@@ -22,7 +22,7 @@ def fibonacci(n):
         return n
     return fibonacci(n-1) + fibonacci(n-2)
 """
-    
+
     # Analyze the code
     result = analyzer.analyze(code)
     print(result)
@@ -34,9 +34,9 @@ def example_custom_question():
     print("=" * 60)
     print("Example 2: Custom Question")
     print("=" * 60)
-    
+
     analyzer = CodeAnalyzer()
-    
+
     code = """
 def bubble_sort(arr):
     n = len(arr)
@@ -46,11 +46,10 @@ def bubble_sort(arr):
                 arr[j], arr[j+1] = arr[j+1], arr[j]
     return arr
 """
-    
+
     # Ask about time complexity
     result = analyzer.analyze(
-        code, 
-        question="What is the time complexity of this algorithm?"
+        code, question="What is the time complexity of this algorithm?"
     )
     print(result)
     print()
@@ -61,9 +60,9 @@ def example_bug_detection():
     print("=" * 60)
     print("Example 3: Bug Detection")
     print("=" * 60)
-    
+
     analyzer = CodeAnalyzer()
-    
+
     # Code with potential issues
     buggy_code = """
 def divide_numbers(a, b):
@@ -75,10 +74,9 @@ def find_item(items, target):
             return i
     return -1
 """
-    
+
     result = analyzer.analyze(
-        buggy_code,
-        question="Find potential bugs and issues in this code"
+        buggy_code, question="Find potential bugs and issues in this code"
     )
     print(result)
     print()
@@ -89,14 +87,13 @@ def example_file_analysis():
     print("=" * 60)
     print("Example 4: File Analysis")
     print("=" * 60)
-    
+
     analyzer = CodeAnalyzer()
-    
+
     # Analyze this script itself
     try:
         result = analyzer.analyze_file(
-            __file__,
-            question="What does this script demonstrate?"
+            __file__, question="What does this script demonstrate?"
         )
         print(result)
     except Exception as e:
@@ -109,9 +106,9 @@ def example_optimization_suggestions():
     print("=" * 60)
     print("Example 5: Optimization Suggestions")
     print("=" * 60)
-    
+
     analyzer = CodeAnalyzer()
-    
+
     code = """
 def find_duplicates(numbers):
     duplicates = []
@@ -121,10 +118,9 @@ def find_duplicates(numbers):
                 duplicates.append(numbers[i])
     return duplicates
 """
-    
+
     result = analyzer.analyze(
-        code,
-        question="Suggest performance optimizations for this code"
+        code, question="Suggest performance optimizations for this code"
     )
     print(result)
     print()
@@ -134,14 +130,14 @@ if __name__ == "__main__":
     print("🔍 chi_llm SDK Examples")
     print("=" * 60)
     print()
-    
+
     # Run examples
     example_simple_analysis()
     example_custom_question()
     example_bug_detection()
     example_optimization_suggestions()
-    
+
     # Optional: analyze a file
     # example_file_analysis()
-    
+
     print("✨ All examples completed!")

@@ -224,6 +224,28 @@ chi-llm setup recommend
 chi-llm setup recommend --json | jq
 ```
 
+### 🔌 `providers` — Manage provider configuration
+
+```bash
+# List supported providers (JSON/human)
+chi-llm providers list
+chi-llm providers list --json | jq
+
+# Show current provider (merged from env/files)
+chi-llm providers current
+chi-llm providers current --json | jq
+
+# Set provider locally for this project
+chi-llm providers set lmstudio --host 127.0.0.1 --port 1234 --model qwen2.5:latest --local
+
+# Set provider globally (user config)
+chi-llm providers set ollama --host 127.0.0.1 --port 11434 --model llama3.2:latest
+```
+
+Notes:
+- Supported now: `local`, `lmstudio`, `ollama`. Others (`openai`, `anthropic`, `groq`, `gemini`) are placeholders.
+- Settings are written under the `provider` key in `.chi_llm.json` (local) or the global config.
+
 ### 🩺 `diagnostics` - Environment checks
 
 ```bash

@@ -98,7 +98,7 @@ python -m pytest tests/ --cov=chi_llm --cov-report=html
 
 ### Model Management: `chi_llm/models.py`
 - **ModelInfo dataclass**: Model metadata (size, RAM, context, etc.)
-- **MODELS registry**: 9 curated models from 270M to 9B
+- **MODELS registry**: 18 curated models from 270M to 9B (including coding & reasoning models)
 - **ModelManager class**: Handles downloads, switching, configuration
 - **Configuration hierarchy**:
   1. Environment variables (CHI_LLM_MODEL, etc.)
@@ -137,10 +137,10 @@ python -m pytest tests/ --cov=chi_llm --cov-report=html
 - **Max tokens**: 4,096 (default response length)
 
 ### Available Models
-- **Tiny (270M)**: gemma-270m - Fast, minimal RAM
-- **Small (1-2B)**: qwen2-1.5b, stablelm-2-1.6b
-- **Medium (2-3B)**: gemma2-2b, phi2-2.7b, stablelm-3b
-- **Large (3-9B)**: phi3-mini, qwen2.5-3b, gemma2-9b
+- **Tiny (270M-0.6B)**: gemma-270m, qwen3-0.6b, qwen2.5-coder-0.5b - Fast, minimal RAM
+- **Small (1-2B)**: qwen3-1.7b, stablelm-2-1.6b, liquid-lfm2-1.2b, deepseek-r1-1.5b, qwen2.5-coder-1.5b
+- **Medium (2-4B)**: gemma2-2b, phi2-2.7b, stablelm-3b, qwen2.5-coder-3b, qwen3-4b (256K context!)
+- **Large (3-9B)**: phi3-mini, qwen3-8b, gemma2-9b, qwen2.5-coder-7b
 
 ### Model Storage
 - **Location**: `~/.cache/chi_llm/`
@@ -159,7 +159,7 @@ python -m pytest tests/ --cov=chi_llm --cov-report=html
 {
   "default_model": "model_id",
   "downloaded_models": ["list", "of", "models"],
-  "preferred_context": 8192,
+  "preferred_context": 32768,
   "preferred_max_tokens": 4096
 }
 ```

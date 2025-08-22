@@ -287,6 +287,70 @@ export CHI_LLM_PROVIDER_API_KEY=sk-...
 
 Environment variables override file configuration and are safe to use for CI/CD or local overrides.
 
+### LM Studio
+
+LM Studio exposes an OpenAI-compatible local server (default `127.0.0.1:1234`).
+Enable it in LM Studio (Settings → Server), then set chi_llm to use it:
+
+YAML:
+```yaml
+provider:
+  type: lmstudio
+  host: 127.0.0.1
+  port: 1234
+  model: my-local-model  # name as shown in LM Studio
+```
+
+Environment:
+```bash
+export CHI_LLM_PROVIDER_TYPE=lmstudio
+export CHI_LLM_PROVIDER_HOST=127.0.0.1
+export CHI_LLM_PROVIDER_PORT=1234
+export CHI_LLM_PROVIDER_MODEL=my-local-model
+```
+
+Usage stays the same in code; MicroLLM automatically routes calls:
+```python
+from chi_llm import MicroLLM
+
+llm = MicroLLM()
+print(llm.generate("Hello from LM Studio"))
+```
+
+If LM Studio isn’t reachable, errors include the base URL and guidance to start the server.
+
+### Ollama
+
+Ollama runs a local server by default on `127.0.0.1:11434`.
+Set chi_llm to use it:
+
+YAML:
+```yaml
+provider:
+  type: ollama
+  host: 127.0.0.1
+  port: 11434
+  model: llama3.2:latest  # or any pulled model name
+```
+
+Environment:
+```bash
+export CHI_LLM_PROVIDER_TYPE=ollama
+export CHI_LLM_PROVIDER_HOST=127.0.0.1
+export CHI_LLM_PROVIDER_PORT=11434
+export CHI_LLM_PROVIDER_MODEL=llama3.2:latest
+```
+
+The API stays the same:
+```python
+from chi_llm import MicroLLM
+
+llm = MicroLLM()
+print(llm.chat("Hello, Ollama!"))
+```
+
+If Ollama is not reachable, errors include the base URL and a hint to run `ollama serve`.
+
 ### Check Config Source
 
 ```bash

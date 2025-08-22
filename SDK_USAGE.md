@@ -102,6 +102,47 @@ category = llm.classify("I love this!", categories=["positive", "negative", "neu
 analysis = llm.analyze(code_snippet)
 ```
 
+## RAG (Retrieval Augmented Generation)
+
+### Quick RAG with Documents
+
+```python
+from chi_llm.rag import quick_rag
+
+# Your documents
+docs = [
+    "Python was created by Guido van Rossum",
+    "Python is a high-level programming language"
+]
+
+# Query with automatic context retrieval
+answer = quick_rag("Who created Python?", docs)
+print(answer)  # Will use relevant docs as context
+```
+
+### Persistent RAG Database
+
+```python
+from chi_llm.rag import MicroRAG
+
+# Initialize with custom database path
+rag = MicroRAG(db_path="./my_knowledge.db")
+
+# Add documents (supports 100+ languages with multilingual-e5-base)
+rag.add_document("Python to język programowania")
+rag.add_document("Stworzył go Guido van Rossum")
+
+# Query in any language
+response = rag.query("Kto stworzył Pythona?")
+print(response)
+```
+
+### Configuration
+
+RAG uses FastEmbed by default with `intfloat/multilingual-e5-base` (280MB, 768 dims, 100+ languages).
+
+Install with: `pip install "chi-llm[rag]"`
+
 ## Advanced Usage
 
 ### Integration in CI/CD Pipeline

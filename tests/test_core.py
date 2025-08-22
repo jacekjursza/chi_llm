@@ -297,28 +297,40 @@ class TestModelManagement:
 
     @patch("chi_llm.core.hf_hub_download")
     @patch("chi_llm.core.MODEL_DIR")
-    def test_model_download(self, mock_model_dir, mock_download):
+    @patch("chi_llm.models.MODEL_DIR")
+    def test_model_download(self, mock_models_model_dir, mock_model_dir, mock_download):
         """Test model download when not cached."""
         # Setup
         with tempfile.TemporaryDirectory() as tmpdir:
             # Make MODEL_DIR return the tempdir path
-            mock_model_dir.__str__ = lambda self: tmpdir
-            mock_model_dir.__truediv__ = lambda self, x: Path(tmpdir) / x
-            mock_model_dir.mkdir = Mock()
+            # Patch both core and models MODEL_DIR to the tempdir
+            for mdir in (mock_model_dir, mock_models_model_dir):
+                mdir.__str__ = lambda self: tmpdir
+                mdir.__truediv__ = lambda self, x: Path(tmpdir) / x
+                mdir.mkdir = Mock()
             mock_download.return_value = str(Path(tmpdir) / MODEL_FILE)
 
-            # Test
-            from chi_llm.core import MicroLLM
+            # Ensure we don't pick up repository-level .chi_llm.json
+            # which could influence default model selection.
+            import os
 
-            with patch("chi_llm.core.Llama"):
-                llm = MicroLLM()
+            old_cwd = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                # Test
+                from chi_llm.core import MicroLLM
 
-            # Verify download was called (without checking exact local_dir)
-            assert mock_download.called
-            call_args = mock_download.call_args
-            assert call_args[1]["repo_id"] == MODEL_REPO
-            assert call_args[1]["filename"] == MODEL_FILE
-            assert call_args[1]["resume_download"] == True
+                with patch("chi_llm.core.Llama"):
+                    _ = MicroLLM()
+
+                # Verify download was called (without checking exact local_dir)
+                assert mock_download.called
+                call_args = mock_download.call_args
+                assert call_args[1]["repo_id"] == MODEL_REPO
+                assert call_args[1]["filename"] == MODEL_FILE
+                assert call_args[1]["resume_download"] == True
+            finally:
+                os.chdir(old_cwd)
 
     @patch("chi_llm.core.Llama")
     def test_model_loading_error(self, mock_llama):
@@ -334,8 +346,12 @@ class TestModelManagement:
         # Verify
         assert "Failed to load model" in str(exc_info.value)
 
+    @patch("chi_llm.models.MODEL_DIR")
+    @patch("chi_llm.core.MODEL_DIR")
     @patch("chi_llm.core.hf_hub_download")
-    def test_default_model_from_project_config(self, mock_download, tmp_path):
+    def test_default_model_from_project_config(
+        self, mock_download, mock_core_model_dir, mock_models_model_dir, tmp_path
+    ):
         """MicroLLM should honor default_model from per-project .chi_llm.json."""
         # Write a local project config selecting a specific model
         cfg_path = tmp_path / ".chi_llm.json"
@@ -349,6 +365,14 @@ class TestModelManagement:
         os.chdir(tmp_path)
         try:
             # Prepare mocks
+            # Route ModelManager's cache dir to the temp project directory
+            mock_models_model_dir.__str__ = lambda self: str(tmp_path)
+            mock_models_model_dir.__truediv__ = lambda self, x: tmp_path / x
+            mock_models_model_dir.mkdir = Mock()
+            # Route core legacy cache dir to temp as well (avoid real cached models)
+            mock_core_model_dir.__str__ = lambda self: str(tmp_path)
+            mock_core_model_dir.__truediv__ = lambda self, x: tmp_path / x
+            mock_core_model_dir.mkdir = Mock()
             mock_download.return_value = str(tmp_path / MODELS["qwen3-1.7b"].filename)
             with patch("chi_llm.core.Llama"):
                 from chi_llm.core import MicroLLM
@@ -363,10 +387,25 @@ class TestModelManagement:
             os.chdir(old_cwd)
 
     @patch.dict("os.environ", {"CHI_LLM_MODEL": "qwen3-1.7b"})
+    @patch("chi_llm.models.MODEL_DIR")
+    @patch("chi_llm.core.MODEL_DIR")
     @patch("chi_llm.core.hf_hub_download")
-    def test_default_model_from_env(self, mock_download):
+    def test_default_model_from_env(
+        self, mock_download, mock_core_model_dir, mock_models_model_dir
+    ):
         """MicroLLM should honor CHI_LLM_MODEL environment variable."""
         from chi_llm.models import MODELS
+
+        # Point both caches at a clean temp dir
+        import tempfile
+        from pathlib import Path
+
+        tmpdir = tempfile.TemporaryDirectory()
+        tmp_path = Path(tmpdir.name)
+        for mdir in (mock_core_model_dir, mock_models_model_dir):
+            mdir.__str__ = lambda self: str(tmp_path)
+            mdir.__truediv__ = lambda self, x: tmp_path / x
+            mdir.mkdir = Mock()
 
         mock_download.return_value = "/fake/path/model.gguf"
         with patch("chi_llm.core.Llama"):

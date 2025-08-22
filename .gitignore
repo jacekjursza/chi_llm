@@ -75,3 +75,13 @@ dmypy.json
 
 # Local development
 *.local
+
+# Temporary documentation
+docs_tmp/
+
+# Node UI
+chi_llm/ui_frontend/node_modules/
+
+# Local artifacts
+.pytest_output*.txt
+coverage.xml
