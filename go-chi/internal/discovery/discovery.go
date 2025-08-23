@@ -86,9 +86,23 @@ func ensureBase(b string) string {
     return "http://" + b
 }
 
-// Discover lists models for provider type (lmstudio|ollama) using default ports when host blank.
+// LocalModels returns a list of commonly available local GGUF models.
+// In a real implementation, this would scan the model directory.
+func LocalModels() ([]ModelInfo, error) {
+    // Return some common local models as placeholders
+    return []ModelInfo{
+        {ID: "gemma-270m", SizeB: 200 * 1024 * 1024},      // 200MB
+        {ID: "qwen3-1.7b", SizeB: 1700 * 1024 * 1024},     // 1.7GB
+        {ID: "phi3-mini", SizeB: 3800 * 1024 * 1024},      // 3.8GB
+        {ID: "llama3-8b", SizeB: 8000 * 1024 * 1024},      // 8GB
+    }, nil
+}
+
+// Discover lists models for provider type (local|lmstudio|ollama) using default ports when host blank.
 func Discover(provider, host string, port int) ([]ModelInfo, error) {
     switch provider {
+    case "local":
+        return LocalModels()
     case "lmstudio":
         if port == 0 { port = 1234 }
         return LMStudioModels(fmt.Sprintf("%s:%d", hostOrLocal(host), port))

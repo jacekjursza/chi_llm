@@ -4,7 +4,7 @@ import "testing"
 
 func TestListContents(t *testing.T) {
     got := List()
-    want := []string{LlamaCPP, LMStudio, Ollama}
+    want := []string{Local, LMStudio, Ollama, OpenAI, ClaudeCLI, OpenAICLI}
     if len(got) != len(want) {
         t.Fatalf("unexpected length: got %d want %d", len(got), len(want))
     }

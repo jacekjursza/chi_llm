@@ -184,13 +184,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                     return m, nil
                 }
                 p := m.providers[m.index]
-                if p == "lmstudio" || p == "ollama" {
+                // Allow model browsing for local, lmstudio, and ollama
+                if p == "local" || p == "lmstudio" || p == "ollama" {
                     m.providerForModels = p
                     m.modelItems = nil
                     m.modelIndex = 0
                     m.modelStatus = "Loading models…"
                     m.page = PageModelBrowser
                     return m, fetchModelsCmd(p)
+                }
+                // For other providers, show a message
+                if p == "openai" || p == "claude-cli" || p == "openai-cli" {
+                    m.modelStatus = "Model browsing not available for " + p
                 }
             }
             return m, nil
@@ -553,12 +558,122 @@ func (m Model) View() string {
         status := "h: toggle menu | arrows/pgup/pgdn: scroll | 1-4: navigate sections"
         lines = append(lines, padANSI(m.styles.Help.Render(status), innerW))
     case PageConfigure:
-        lines = append(lines, strings.Repeat(" ", innerW))
-        if len(items) > 0 {
-            lines = append(lines, items...)
+        bodyHeight := max(3, innerH-headerLines-2) // leave lines for help/theme
+        
+        // Calculate menu and content widths (same as Welcome)
+        menuWidth := 0
+        if m.showTOC {
+            menuWidth = innerW / 3
+            if menuWidth < 25 {
+                menuWidth = 25
+            }
+            if menuWidth > 50 {
+                menuWidth = 50
+            }
         }
-        if m.providerModel != "" {
-            lines = append(lines, padANSI(m.styles.Help.Render("model: ")+m.providerModel, innerW))
+        contentWidth := innerW - menuWidth
+        if menuWidth > 0 {
+            contentWidth -= 3 // Space for separator " │ "
+        }
+        
+        // Build provider list with details
+        var providerLines []string
+        providerLines = append(providerLines, m.styles.Subtitle.Render("Select Provider"))
+        providerLines = append(providerLines, "")
+        
+        for i, p := range m.providers {
+            style := m.styles.Normal
+            pointer := "  "
+            if i == m.index {
+                style = m.styles.Selected
+                pointer = "▸ "
+            }
+            
+            // Add provider name with description
+            providerName := p
+            switch p {
+            case "local":
+                providerName = "Local (GGUF models)"
+            case "lmstudio":
+                providerName = "LM Studio (server)"
+            case "ollama":
+                providerName = "Ollama (server)"
+            case "openai":
+                providerName = "OpenAI (API)"
+            case "claude-cli":
+                providerName = "Claude CLI (bridge)"
+            case "openai-cli":
+                providerName = "OpenAI CLI (bridge)"
+            }
+            
+            providerLines = append(providerLines, style.Render(pointer+providerName))
+        }
+        
+        // Add provider details section
+        if len(m.providers) > 0 && m.index < len(m.providers) {
+            providerLines = append(providerLines, "")
+            providerLines = append(providerLines, m.styles.Subtitle.Render("Details"))
+            
+            selected := m.providers[m.index]
+            switch selected {
+            case "local":
+                providerLines = append(providerLines, m.styles.Help.Render("Uses local GGUF models"))
+                providerLines = append(providerLines, m.styles.Help.Render("No server required"))
+            case "lmstudio", "ollama":
+                providerLines = append(providerLines, m.styles.Help.Render("Host: localhost"))
+                port := "1234"
+                if selected == "ollama" {
+                    port = "11434"
+                }
+                providerLines = append(providerLines, m.styles.Help.Render("Port: "+port))
+                providerLines = append(providerLines, m.styles.Help.Render("Press 'm' to browse models"))
+            case "openai", "claude-cli", "openai-cli":
+                providerLines = append(providerLines, m.styles.Help.Render("Requires API key"))
+                providerLines = append(providerLines, m.styles.Help.Render("Set in environment"))
+            }
+            
+            if m.providerModel != "" {
+                providerLines = append(providerLines, "")
+                providerLines = append(providerLines, m.styles.Normal.Render("Selected model: ")+m.providerModel)
+            }
+        }
+        
+        // Add actions hint
+        providerLines = append(providerLines, "")
+        providerLines = append(providerLines, m.styles.Help.Render("Actions:"))
+        providerLines = append(providerLines, m.styles.Help.Render("  [Enter] Select provider"))
+        providerLines = append(providerLines, m.styles.Help.Render("  [m] Browse models (if available)"))
+        providerLines = append(providerLines, m.styles.Help.Render("  [b] Build configuration"))
+        
+        // Ensure content fits in available space
+        for len(providerLines) < bodyHeight {
+            providerLines = append(providerLines, "")
+        }
+        
+        // Build the display with menu panel
+        if m.showTOC {
+            menuLines := strings.Split(m.renderMenu(menuWidth, bodyHeight), "\n")
+            
+            // Ensure both have same number of lines
+            for len(menuLines) < bodyHeight {
+                menuLines = append(menuLines, "")
+            }
+            for len(providerLines) < bodyHeight {
+                providerLines = append(providerLines, "")
+            }
+            
+            // Combine line by line with proper padding
+            for i := 0; i < bodyHeight && i < len(menuLines) && i < len(providerLines); i++ {
+                menuLine := padANSI(menuLines[i], menuWidth)
+                contentLine := padANSI(providerLines[i], contentWidth)
+                line := menuLine + " │ " + contentLine
+                lines = append(lines, line)
+            }
+        } else {
+            // No menu, just show provider content
+            for _, line := range providerLines {
+                lines = append(lines, padANSI(line, innerW))
+            }
         }
     case PageRebuild:
         lines = append(lines, strings.Repeat(" ", innerW))
