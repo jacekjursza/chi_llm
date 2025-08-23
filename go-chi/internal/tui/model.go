@@ -66,6 +66,9 @@ type Model struct {
     tocFocused    bool // Whether TOC has focus (vs content viewport)
     showTOC       bool // Toggle TOC visibility
     currentSection int  // Current section being displayed
+    // Current configuration
+    currentProvider string // Provider from local config
+    currentModel    string // Model from local config
 }
 
 // NewModel constructs a new Model instance.
@@ -77,6 +80,10 @@ func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
     vp.MouseWheelEnabled = true
     wtxt := loadWelcome()
     toc := parseTOC(wtxt)
+    
+    // Read current provider configuration
+    currentProv, currentMod := ReadLocalConfig()
+    
     return Model{
         keys:      DefaultKeyMap(),
         mode:      mode,
@@ -94,6 +101,8 @@ func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
         showTOC:   true,
         tocIndex:  0,
         currentSection: 0,
+        currentProvider: currentProv,
+        currentModel:    currentMod,
     }
 }
 
@@ -177,6 +186,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             return m, nil
         case key.Matches(msg, m.keys.Sec4):
             m.page = PageRebuild
+            return m, nil
+        case key.Matches(msg, m.keys.Settings):
+            m.page = PageSettings
             return m, nil
         case key.Matches(msg, m.keys.Models):
             if m.page == PageConfigure {
@@ -286,12 +298,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                     prov = m.providers[m.index]
                 }
                 if prov == "" {
-                    prov = "llamacpp"
+                    prov = "local"
                 }
                 if m.rebuildIx == 0 {
                     // project .chi_llm.json in CWD
                     if p, err := WriteProjectConfig(prov, m.providerModel); err == nil {
                         m.lastSaved = p
+                        // Update current provider info
+                        m.currentProvider = prov
+                        m.currentModel = m.providerModel
                     } else {
                         m.lastSaved = "(error)"
                     }
@@ -366,7 +381,20 @@ func (m Model) renderMenu(width, height int) string {
     
     var lines []string
     
-    // Title
+    // Selected Provider section at the top
+    lines = append(lines, m.styles.Subtitle.Render("Selected Provider"))
+    if m.currentProvider != "" {
+        lines = append(lines, m.styles.Normal.Render("  "+m.currentProvider))
+        if m.currentModel != "" {
+            lines = append(lines, m.styles.Help.Render("  "+m.currentModel))
+        }
+    } else {
+        lines = append(lines, m.styles.Help.Render("  None"))
+    }
+    lines = append(lines, strings.Repeat("─", min(width, 30)))
+    lines = append(lines, "") // spacer
+    
+    // Menu title
     titleStyle := m.styles.Subtitle
     lines = append(lines, titleStyle.Render("Menu"))
     lines = append(lines, strings.Repeat("─", min(width, 30)))
@@ -409,6 +437,7 @@ func (m Model) renderMenu(width, height int) string {
         label string
         desc  string
     }{
+        {"s", "Settings", "Configure settings"},
         {"b", "Build", "Build configuration"},
         {"?", "Help", "Toggle help"},
         {"q", "Quit", "Exit application"},
@@ -741,6 +770,68 @@ func (m Model) View() string {
             }
             lines = append(lines, padANSI(style.Render(pointer+label), innerW))
         }
+    case PageSettings:
+        bodyHeight := max(3, innerH-headerLines-2) // leave lines for help/theme
+        
+        // Calculate menu and content widths (same as Welcome)
+        menuWidth := 0
+        if m.showTOC {
+            menuWidth = innerW / 3
+            if menuWidth < 25 {
+                menuWidth = 25
+            }
+            if menuWidth > 50 {
+                menuWidth = 50
+            }
+        }
+        contentWidth := innerW - menuWidth
+        if menuWidth > 0 {
+            contentWidth -= 3 // Space for separator " │ "
+        }
+        
+        // Build settings content
+        var settingsLines []string
+        settingsLines = append(settingsLines, m.styles.Subtitle.Render("Settings"))
+        settingsLines = append(settingsLines, "")
+        settingsLines = append(settingsLines, m.styles.Normal.Render("Work in progress..."))
+        settingsLines = append(settingsLines, "")
+        settingsLines = append(settingsLines, m.styles.Help.Render("This page will contain:"))
+        settingsLines = append(settingsLines, m.styles.Help.Render("• Theme configuration"))
+        settingsLines = append(settingsLines, m.styles.Help.Render("• Animation settings"))
+        settingsLines = append(settingsLines, m.styles.Help.Render("• Default paths"))
+        settingsLines = append(settingsLines, m.styles.Help.Render("• Cache management"))
+        settingsLines = append(settingsLines, m.styles.Help.Render("• Advanced options"))
+        
+        // Ensure content fits in available space
+        for len(settingsLines) < bodyHeight {
+            settingsLines = append(settingsLines, "")
+        }
+        
+        // Build the display with menu panel
+        if m.showTOC {
+            menuLines := strings.Split(m.renderMenu(menuWidth, bodyHeight), "\n")
+            
+            // Ensure both have same number of lines
+            for len(menuLines) < bodyHeight {
+                menuLines = append(menuLines, "")
+            }
+            for len(settingsLines) < bodyHeight {
+                settingsLines = append(settingsLines, "")
+            }
+            
+            // Combine line by line with proper padding
+            for i := 0; i < bodyHeight && i < len(menuLines) && i < len(settingsLines); i++ {
+                menuLine := padANSI(menuLines[i], menuWidth)
+                contentLine := padANSI(settingsLines[i], contentWidth)
+                line := menuLine + " │ " + contentLine
+                lines = append(lines, line)
+            }
+        } else {
+            // No menu, just show settings content
+            for _, line := range settingsLines {
+                lines = append(lines, padANSI(line, innerW))
+            }
+        }
     }
     lines = append(lines, strings.Repeat(" ", innerW), help, themeLbl)
 
@@ -790,6 +881,8 @@ func (m Model) headerTitle() string {
         return "chi-llm • diagnostics"
     case PageModelBrowser:
         return "chi-llm • provider models"
+    case PageSettings:
+        return "chi-llm • settings"
     default:
         return "chi-llm"
     }
@@ -807,6 +900,8 @@ func (m Model) subtitle() string {
         return "Provider status and environment"
     case PageModelBrowser:
         return "Pick a model for the provider"
+    case PageSettings:
+        return "Application settings"
     default:
         return ""
     }
@@ -821,6 +916,7 @@ const (
     PageRebuild
     PageDiagnostics
     PageModelBrowser
+    PageSettings
 )
 
 func loadWelcome() string {

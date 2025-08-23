@@ -13,11 +13,12 @@ type KeyMap struct {
     Export key.Binding
     Toggle key.Binding
     Anim   key.Binding
-    Help   key.Binding
-    Sec1   key.Binding
-    Sec2   key.Binding
-    Sec3   key.Binding
-    Sec4   key.Binding
+    Help     key.Binding
+    Sec1     key.Binding
+    Sec2     key.Binding
+    Sec3     key.Binding
+    Sec4     key.Binding
+    Settings key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -78,6 +79,10 @@ func DefaultKeyMap() KeyMap {
         Sec4: key.NewBinding(
             key.WithKeys("b"),
             key.WithHelp("b", "build"),
+        ),
+        Settings: key.NewBinding(
+            key.WithKeys("s"),
+            key.WithHelp("s", "settings"),
         ),
     }
 }
