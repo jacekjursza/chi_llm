@@ -18,7 +18,13 @@ type KeyMap struct {
     Sec2     key.Binding
     Sec3     key.Binding
     Sec4     key.Binding
+    Sec5     key.Binding
     Settings key.Binding
+    Tab      key.Binding
+    Test     key.Binding
+    Add      key.Binding
+    Save     key.Binding
+    Delete   key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -74,9 +80,13 @@ func DefaultKeyMap() KeyMap {
         ),
         Sec3: key.NewBinding(
             key.WithKeys("3"),
-            key.WithHelp("3", "diagnostics"),
+            key.WithHelp("3", "select default"),
         ),
         Sec4: key.NewBinding(
+            key.WithKeys("4"),
+            key.WithHelp("4", "diagnostics"),
+        ),
+        Sec5: key.NewBinding(
             key.WithKeys("b"),
             key.WithHelp("b", "build"),
         ),
@@ -84,17 +94,37 @@ func DefaultKeyMap() KeyMap {
             key.WithKeys("s"),
             key.WithHelp("s", "settings"),
         ),
+        Tab: key.NewBinding(
+            key.WithKeys("tab"),
+            key.WithHelp("tab", "next field"),
+        ),
+        Test: key.NewBinding(
+            key.WithKeys("T"),
+            key.WithHelp("T", "test connection"),
+        ),
+        Add: key.NewBinding(
+            key.WithKeys("A", "a"),
+            key.WithHelp("A/a", "add provider"),
+        ),
+        Save: key.NewBinding(
+            key.WithKeys("S"),
+            key.WithHelp("S", "save provider"),
+        ),
+        Delete: key.NewBinding(
+            key.WithKeys("D"),
+            key.WithHelp("D", "delete provider"),
+        ),
     }
 }
 
 // ShortHelp and FullHelp implement bubbles help keymap interface.
 func (k KeyMap) ShortHelp() []key.Binding {
-    return []key.Binding{k.Sec1, k.Sec2, k.Sec3, k.Sec4, k.Up, k.Down, k.Enter, k.Models, k.Export, k.Back, k.Anim, k.Quit}
+    return []key.Binding{k.Sec1, k.Sec2, k.Sec3, k.Sec4, k.Up, k.Down, k.Enter, k.Models, k.Export, k.Add, k.Save, k.Test, k.Back, k.Anim, k.Quit}
 }
 
 func (k KeyMap) FullHelp() [][]key.Binding {
     return [][]key.Binding{
         {k.Sec1, k.Sec2, k.Sec3, k.Sec4, k.Up, k.Down, k.Enter},
-        {k.Models, k.Export, k.Back, k.Anim, k.Toggle, k.Help, k.Quit},
+        {k.Models, k.Export, k.Add, k.Save, k.Test, k.Delete, k.Back, k.Anim, k.Toggle, k.Help, k.Quit},
     }
 }

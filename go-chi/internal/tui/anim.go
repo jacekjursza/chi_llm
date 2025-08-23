@@ -11,6 +11,7 @@ import (
 )
 
 type tickMsg time.Time
+type hideBannerMsg time.Time
 
 const tickInterval = 100 * time.Millisecond
 const bannerSpeedDiv = 4 // slower banner shift (every 4 ticks)
