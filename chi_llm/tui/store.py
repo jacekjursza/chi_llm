@@ -171,6 +171,48 @@ class TUIStore:
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
         return MODEL_DIR / filename
 
+    def remove_model(self, model_id: str) -> bool:
+        """Remove a downloaded model file and update config.
+
+        Returns True if a file was removed, False if no file existed.
+        """
+        from ..models import MODEL_DIR  # type: ignore
+
+        try:
+            repo, filename = self._mgr.get_download_info(model_id)
+        except Exception as e:  # pragma: no cover - invalid model id
+            raise RuntimeError(f"Unknown model '{model_id}': {e}")
+
+        path = MODEL_DIR / filename
+        removed = False
+        try:
+            if path.exists():
+                path.unlink()
+                removed = True
+        except Exception as e:  # pragma: no cover - FS errors
+            raise RuntimeError(f"Failed to remove model '{model_id}': {e}")
+
+        # Update downloaded_models list if present
+        try:
+            cfg = dict(self._mgr.config)
+            dls = list(cfg.get("downloaded_models") or [])
+            if model_id in dls:
+                dls.remove(model_id)
+                self._mgr.config["downloaded_models"] = dls
+                # Persist to default target
+                self._mgr.save_config()
+        except Exception:
+            pass
+
+        return removed
+
+    def get_models_dir(self) -> Path:
+        """Return the local directory where models are stored."""
+        from ..models import MODEL_DIR  # type: ignore
+
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        return MODEL_DIR
+
     # ----- Provider config API -----
     def get_provider(self) -> Dict[str, Any]:
         """Return normalized provider configuration from merged config.
@@ -259,6 +301,23 @@ class TUIStore:
             "ok": True,
             "models_count": 0,
         }
+
+    def list_provider_models(
+        self, provider: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """List models for a given external provider (lmstudio/ollama).
+
+        Returns list of dicts with at least keys: id, name, size (optional).
+        """
+        try:
+            from ..providers.discovery import (
+                list_provider_models as _list_provider_models,
+            )
+
+            prov = dict(provider or self.get_provider() or {})
+            return list(_list_provider_models(prov))
+        except Exception:
+            return []
 
     # ----- Diagnostics API -----
     def get_diagnostics(self) -> Dict[str, Any]:

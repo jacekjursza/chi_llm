@@ -552,18 +552,20 @@ Notes:
 - Copy `.env.sample` to `.env` and `source .env` (or use python-dotenv).
  - YAML config is available via `--yaml` (writes `.chi_llm.yaml`).
 
-### UI (Textual)
+### UI (Go TUI)
 
 ```bash
-# Install the optional UI extra (recommended)
-pip install "chi-llm[ui]"    # or: pip install textual
-
-# Run the interactive TUI
-chi-llm config
+# Run the interactive Go TUI (Bubble Tea)
+cd go-chi && go run ./cmd/chi-tui
 ```
 
 Shortcuts:
-- `m` — Models list
-- `p` — Provider status
-- `d` — Diagnostics
+- `1/2/3` — Sections (Welcome / Configure / (Re)Build)
+- `4` — Diagnostics (status + export JSON)
+- `↑/↓` or `k/j` — Navigate lists
+- `enter` — Select / Confirm
+- `b` — Back to Welcome
 - `e` — Export diagnostics to `chi_llm_diagnostics.json`
+- `t` — Toggle theme, `a` — Toggle animation
+
+Legacy: the previous Python/Textual UI is now in maintenance mode.

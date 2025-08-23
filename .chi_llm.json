@@ -1,16 +1,5 @@
 {
-  "default_model": "liquid-lfm2-1.2b",
-  "downloaded_models": [
-    "gemma-270m",
-    "qwen3-1.7b",
-    "liquid-lfm2-1.2b"
-  ],
-  "preferred_context": 32768,
-  "preferred_max_tokens": 4096,
   "provider": {
-    "type": "local",
-    "host": "127.0.0.1",
-    "port": null,
-    "model": null
+    "type": "llamacpp"
   }
 }

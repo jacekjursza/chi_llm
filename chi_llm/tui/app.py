@@ -7,16 +7,8 @@ It is intentionally small and imports Textual only within `launch_tui`.
 from typing import List, Optional
 
 
-def launch_tui(
-    ui_args: Optional[List[str]] = None,
-) -> None:  # pragma: no cover - behavior tested via CLI mocks
-    """Launch the Textual-based configuration UI.
-
-    Parameters
-    ----------
-    ui_args : list[str] | None
-        Optional passthrough arguments (currently unused in MVP).
-    """
+def create_app():
+    """Create the Textual App instance for headless testing or running."""
     try:
         # Import Textual only when launching UI to keep it optional.
         from textual.app import App, ComposeResult
@@ -220,6 +212,13 @@ This is the new Textual-based TUI (MVP).
 
             self.push_screen(DownloadScreen())
 
-    app = ChiLLMConfigApp()
+    return ChiLLMConfigApp()
+
+
+def launch_tui(
+    ui_args: Optional[List[str]] = None,
+) -> None:  # pragma: no cover - behavior tested via CLI mocks
+    """Launch the Textual-based configuration UI."""
+    app = create_app()
     # Note: App.run() blocks; tests mock `launch_tui` from CLI to avoid running a TUI.
     app.run()

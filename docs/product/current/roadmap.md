@@ -9,6 +9,7 @@
 - Performance & UX (streaming, async, optional GPU)
 - Knowledge features (RAG polish)
 - Distribution & adoption (PyPI, docs site)
+- Go TUI Migration (replace legacy Textual UI)
 
 ## Milestones
 - M1: Packaging & Onboarding
@@ -25,9 +26,13 @@
 - M4: RAG v2 Polish
   - Simplified config, better sources, indexing ergonomics
   - Acceptance: example showing sources + persistent DB
-- M5: TUI Bootstrap
-  - `chi-llm bootstrap .` to scaffold project config
-  - Acceptance: guided wizard generates `llm-requirements.txt` and `chi.env`
+- M5: Go TUI Parity (Bubble Tea)
+  - Migrate TUI features from Textual to Go (Bubble Tea/Bubbles/Lip Gloss)
+  - Screens: Welcome, Configure Provider (with model browser), Models (manage/download/remove), Diagnostics, (Re)Build/Save config
+  - Acceptance: `go run ./go-chi/cmd/chi-tui` covers parity scenarios; minimal tests under `go-chi/internal/...`
+- M6: TUI Bootstrap Wizard (Go)
+  - In-app bootstrap flow to scaffold project config
+  - Acceptance: guided wizard writes `.chi_llm.json/.yaml`, `.env.sample`, `llm-requirements.txt`
 - M6: Providers (Optional)
   - LM Studio/Ollama detection + config; external providers behind unified API
   - Acceptance: smoke tests for each provider path
@@ -36,3 +41,4 @@
 - Keep zero‑config path working at all times.
 - Prefer incremental, test‑backed changes; add unit tests per feature.
 - Reference architecture principles: `docs/architecture-principles.md`.
+ - Python Textual UI enters maintenance mode; all new TUI work targets `go-chi/`.

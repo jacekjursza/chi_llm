@@ -1,14 +1,18 @@
 """
-UI launcher command (Textual-only).
+UI launcher command.
 
-Launches the Textual (Python) TUI when available. If Textual is not installed,
-prints a concise install hint.
+Prefers launching the Go-based TUI (go-chi/chi-tui) when available; falls back
+to the Python Textual TUI if the Go binary or toolchain isn't present.
 """
 
 from argparse import _SubParsersAction
 from pathlib import Path
 import json
 import importlib.util
+import os
+import re
+import shutil
+import subprocess
 
 try:  # Import lazily to avoid heavy deps when not used
     from ..models import ModelManager
@@ -38,9 +42,148 @@ def _try_launch_textual(ui_args):
         print("Tip: pip install 'chi-llm[ui]' to install the recommended version.")
 
 
+def _find_repo_root(start: Path) -> Path | None:
+    # Heuristic: package is at <root>/chi_llm/..., so root is two levels up
+    for p in [start, *start.parents]:
+        if (p / ".git").exists() and (p / "go-chi").exists():
+            return p
+    # Fallback: walk up 3 levels from this file
+    guess = start
+    for _ in range(3):
+        guess = guess.parent
+    if (guess / "go-chi").exists():
+        return guess
+    return None
+
+
+def _latest_mtime_in(dirpath: Path, patterns=("*.go",)) -> float:
+    latest = 0.0
+    for root, _, _ in os.walk(dirpath):
+        p = Path(root)
+        for pat in patterns:
+            for f in p.glob(pat):
+                try:
+                    latest = max(latest, f.stat().st_mtime)
+                except OSError:
+                    pass
+    return latest
+
+
+def _parse_go_version(s: str) -> tuple[int, int]:
+    m = re.search(r"go(\d+)\.(\d+)", s)
+    if not m:
+        return (0, 0)
+    return (int(m.group(1)), int(m.group(2)))
+
+
+def _resolve_go_bin() -> str | None:
+    # Priority: GO_BIN env -> ~/.local/go/bin/go -> PATH
+    candidates: list[str] = []
+    env_bin = os.getenv("GO_BIN")
+    if env_bin:
+        candidates.append(env_bin)
+    home_bin = os.path.expanduser("~/.local/go/bin/go")
+    candidates.append(home_bin)
+    path_bin = shutil.which("go")
+    if path_bin:
+        candidates.append(path_bin)
+
+    best: tuple[int, int] = (0, 0)
+    best_path: str | None = None
+    for c in candidates:
+        if not c:
+            continue
+        try:
+            out = subprocess.check_output([c, "version"], text=True)
+            ver = _parse_go_version(out)
+            if ver > best:
+                best, best_path = ver, c
+        except Exception:
+            continue
+    return best_path
+
+
+def _try_launch_go(ui_args, force_rebuild: bool = False) -> bool:
+    """Try to launch the Go TUI. Returns True if executed (successfully or with
+    process return code), False if not available and we should fallback.
+
+    Strategy:
+    - Locate repo root and go-chi directory
+    - Ensure binary exists, attempt to build if missing
+    - Exec the binary, forwarding args
+    """
+    here = Path(__file__).resolve()
+    root = _find_repo_root(here)
+    if root is None:
+        return False
+    go_dir = root / "go-chi"
+    if not go_dir.exists():
+        return False
+
+    # Resolve binary path (handle Windows exe)
+    bin_dir = go_dir / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    exe = "chi-tui.exe" if os.name == "nt" else "chi-tui"
+    bin_path = bin_dir / exe
+
+    should_build = force_rebuild or (not bin_path.exists())
+
+    if not should_build:
+        # Rebuild if sources are newer than binary
+        try:
+            bin_mtime = bin_path.stat().st_mtime
+        except OSError:
+            bin_mtime = 0.0
+        src_mtime = max(
+            _latest_mtime_in(go_dir / "cmd"),
+            _latest_mtime_in(go_dir / "internal"),
+            _latest_mtime_in(go_dir, ("go.mod", "go.sum")),
+        )
+        if src_mtime > bin_mtime:
+            should_build = True
+
+    if should_build:
+        # Attempt to build with the newest available Go
+        go = _resolve_go_bin()
+        if go is None:
+            # No Go toolchain available; can't launch Go TUI
+            print("❌ No Go toolchain found. Install Go >= 1.21 or add to PATH.")
+            print('   Tip: export PATH="$HOME/.local/go/bin:$PATH"')
+            return False
+        try:
+            subprocess.run(
+                [go, "build", "-o", str(bin_path), "./cmd/chi-tui"],
+                cwd=str(go_dir),
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to build Go TUI with '{go}': {e}")
+            if "/usr/bin/go" in go:
+                print("   System Go detected. Prefer ~/.local/go/bin/go (>= 1.21).")
+                print('   Tip: export PATH="$HOME/.local/go/bin:$PATH"')
+            return False
+
+    # Launch the Go TUI interactively, forwarding any UI args
+    try:
+        # Inherit TTY; don't use -once/-no-alt here so users get full UI
+        subprocess.run([str(bin_path), *ui_args])
+        # Return True: we attempted; even if non-zero, no fallback to Textual
+        return True
+    except Exception as e:
+        print(f"❌ Failed to launch Go TUI: {e}")
+        return False
+
+
 def cmd_ui(args):
-    # Launch Textual app or print instructions
-    _try_launch_textual(getattr(args, "ui_args", []) or [])
+    ui_args = getattr(args, "ui_args", []) or []
+    force_rebuild = bool(
+        getattr(args, "go_rebuild", False) or os.getenv("CHI_LLM_GO_REBUILD") == "1"
+    )
+    # Prefer Go TUI when available
+    if _try_launch_go(ui_args, force_rebuild=force_rebuild):
+        return
+    # Fallback to Textual app or print instructions
+    _try_launch_textual(ui_args)
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
@@ -108,7 +251,7 @@ def register(subparsers: _SubParsersAction):
     # Preferred command name
     cfg = subparsers.add_parser(
         "config",
-        help="Open the interactive configuration UI (Textual)",
+        help="Open the interactive configuration UI (Go TUI if available)",
     )
     # Subcommands for config management: get/set
     cfg_sub = cfg.add_subparsers(dest="config_command")
@@ -128,8 +271,21 @@ def register(subparsers: _SubParsersAction):
     cfg_set.set_defaults(func=cmd_config_set)
 
     # No subcommand: launch the UI (default)
+    cfg.add_argument(
+        "--go-rebuild",
+        action="store_true",
+        help="Force rebuild the Go TUI before launch",
+    )
     _register_common(cfg)
 
     # Alias for convenience/back-compat
-    ui = subparsers.add_parser("ui", help="Open the configuration UI (Textual)")
+    ui = subparsers.add_parser(
+        "ui",
+        help="Open the configuration UI (Go TUI if available)",
+    )
+    ui.add_argument(
+        "--go-rebuild",
+        action="store_true",
+        help="Force rebuild the Go TUI before launch",
+    )
     _register_common(ui)

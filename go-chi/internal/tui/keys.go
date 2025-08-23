@@ -1,0 +1,95 @@
+package tui
+
+import "github.com/charmbracelet/bubbles/v2/key"
+
+// KeyMap defines key bindings for the TUI.
+type KeyMap struct {
+    Up     key.Binding
+    Down   key.Binding
+    Enter  key.Binding
+    Quit   key.Binding
+    Back   key.Binding
+    Models key.Binding
+    Export key.Binding
+    Toggle key.Binding
+    Anim   key.Binding
+    Help   key.Binding
+    Sec1   key.Binding
+    Sec2   key.Binding
+    Sec3   key.Binding
+    Sec4   key.Binding
+}
+
+// DefaultKeyMap returns the default key bindings.
+func DefaultKeyMap() KeyMap {
+    return KeyMap{
+        Up: key.NewBinding(
+            key.WithKeys("up", "k"),
+            key.WithHelp("↑/k", "up"),
+        ),
+        Down: key.NewBinding(
+            key.WithKeys("down", "j"),
+            key.WithHelp("↓/j", "down"),
+        ),
+        Enter: key.NewBinding(
+            key.WithKeys("enter"),
+            key.WithHelp("enter", "select"),
+        ),
+        Quit: key.NewBinding(
+            key.WithKeys("q", "esc", "ctrl+c"),
+            key.WithHelp("q", "quit"),
+        ),
+        Back: key.NewBinding(
+            key.WithKeys("esc"),
+            key.WithHelp("esc", "back"),
+        ),
+        Models: key.NewBinding(
+            key.WithKeys("m"),
+            key.WithHelp("m", "browse models"),
+        ),
+        Export: key.NewBinding(
+            key.WithKeys("e"),
+            key.WithHelp("e", "export diagnostics"),
+        ),
+        Toggle: key.NewBinding(
+            key.WithKeys("t"),
+            key.WithHelp("t", "toggle theme"),
+        ),
+        Anim: key.NewBinding(
+            key.WithKeys("a"),
+            key.WithHelp("a", "toggle animation"),
+        ),
+        Help: key.NewBinding(
+            key.WithKeys("?"),
+            key.WithHelp("?", "help"),
+        ),
+        Sec1: key.NewBinding(
+            key.WithKeys("1"),
+            key.WithHelp("1", "welcome"),
+        ),
+        Sec2: key.NewBinding(
+            key.WithKeys("2"),
+            key.WithHelp("2", "configure"),
+        ),
+        Sec3: key.NewBinding(
+            key.WithKeys("3"),
+            key.WithHelp("3", "diagnostics"),
+        ),
+        Sec4: key.NewBinding(
+            key.WithKeys("b"),
+            key.WithHelp("b", "build"),
+        ),
+    }
+}
+
+// ShortHelp and FullHelp implement bubbles help keymap interface.
+func (k KeyMap) ShortHelp() []key.Binding {
+    return []key.Binding{k.Sec1, k.Sec2, k.Sec3, k.Sec4, k.Up, k.Down, k.Enter, k.Models, k.Export, k.Back, k.Anim, k.Quit}
+}
+
+func (k KeyMap) FullHelp() [][]key.Binding {
+    return [][]key.Binding{
+        {k.Sec1, k.Sec2, k.Sec3, k.Sec4, k.Up, k.Down, k.Enter},
+        {k.Models, k.Export, k.Back, k.Anim, k.Toggle, k.Help, k.Quit},
+    }
+}

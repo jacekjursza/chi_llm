@@ -4,68 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-chi_llm is a zero-configuration micro-LLM library for Python. It provides instant AI capabilities with no API keys, no cloud dependencies, and automatic model management. The library supports multiple small language models (270M to 9B parameters) and includes features like RAG, prompt templates, and flexible configuration management.
+chi_llm is a zero-configuration micro-LLM library for Python providing instant AI capabilities with no API keys or cloud dependencies. It supports multiple models (270M to 9B parameters) and includes RAG, prompt templates, provider routing, and TUI configuration.
 
-## Common Commands
-
-### CLI Usage
-```bash
-# Interactive setup (choose and download models)
-chi-llm setup
-
-# Generate text
-chi-llm generate "Your prompt here"
-
-# Interactive chat
-chi-llm chat
-
-# Analyze code
-chi-llm analyze file.py -q "What does this do?"
-
-# Model management
-chi-llm models list              # List all available models
-chi-llm models current           # Show current model and config source
-chi-llm models set phi3-mini     # Set default model globally
-chi-llm models set phi3-mini --local  # Set for current project only
-
-# RAG operations
-chi-llm rag query "question" --documents doc1.txt doc2.txt
-chi-llm rag add doc.txt --db knowledge.db
-```
-
-### Python API
-```python
-from chi_llm import MicroLLM, quick_llm
-
-# Zero configuration
-llm = MicroLLM()
-response = llm.generate("Hello!")
-
-# Quick one-liner
-print(quick_llm("Write a haiku"))
-
-# With specific model
-llm = MicroLLM(model_id="phi3-mini")
-
-# RAG usage
-from chi_llm.rag import quick_rag
-answer = quick_rag("question", ["doc1", "doc2"])
-```
-
-### Installation & Setup
-```bash
-# Basic installation
-pip install git+https://github.com/jacekjursza/chi_llm.git
-
-# With RAG support
-pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[rag]"
-
-# Full installation
-pip install "git+https://github.com/jacekjursza/chi_llm.git#egg=chi-llm[full]"
-
-# Development
-pip install -e ".[dev]"
-```
+## Common Development Commands
 
 ### Testing
 ```bash
@@ -75,116 +16,242 @@ python -m pytest tests/ -v
 # Run specific test file
 python -m pytest tests/test_core.py -v
 
-# With coverage
+# Run with coverage
 python -m pytest tests/ --cov=chi_llm --cov-report=html
+
+# Run specific test categories
+python -m pytest tests/test_provider_*.py -v  # Provider tests
+python -m pytest tests/test_tui_*.py -v       # TUI tests
+python -m pytest tests/test_*_cli.py -v       # CLI tests
+```
+
+### Code Quality
+```bash
+# Format code
+black chi_llm/ tests/ --line-length 88
+
+# Lint code
+ruff check chi_llm/ --fix
+
+# Run pre-commit hooks manually
+pre-commit run --all-files
+
+# Install pre-commit hooks
+pre-commit install
+```
+
+### Building & Installation
+```bash
+# Development installation
+pip install -e ".[dev]"
+
+# Install with TUI support
+pip install -e ".[ui]"
+
+# Install with all features
+pip install -e ".[full]"
+
+# Build distribution
+python -m build
+```
+
+### Go TUI Development
+```bash
+# Run Go TUI
+cd go-chi && go run ./cmd/chi-tui
+
+# Run Go tests
+cd go-chi && go test ./...
+
+# Build Go TUI binary
+cd go-chi && go build -o chi-tui ./cmd/chi-tui
 ```
 
 ## Architecture & Key Components
 
-### Core Module: `chi_llm/core.py`
-- **MicroLLM class**: Main interface for all LLM operations
-- **Singleton pattern**: Model loaded once, reused across instances
-- **Model management**: Auto-downloads models from HuggingFace
-- **Key methods**:
-  - `generate()`: Text generation with prompts
-  - `chat()`: Conversational interface with history
-  - `complete()`: Text completion
-  - `ask()`: Question answering with optional context
-  - `analyze()`: Code analysis (backward compatibility)
-  - `extract()`: Structured data extraction
-  - `summarize()`: Text summarization
-  - `translate()`: Language translation
-  - `classify()`: Text classification
+### Provider System Architecture
+The library uses a flexible provider system enabling multiple backend support:
 
-### Model Management: `chi_llm/models.py`
-- **ModelInfo dataclass**: Model metadata (size, RAM, context, etc.)
-- **MODELS registry**: 18 curated models from 270M to 9B (including coding & reasoning models)
-- **ModelManager class**: Handles downloads, switching, configuration
-- **Configuration hierarchy**:
-  1. Environment variables (CHI_LLM_MODEL, etc.)
-  2. Local project config (.chi_llm.json)
-  3. Parent project config (searches up directories)
-  4. Global user config (~/.cache/chi_llm/model_config.json)
-  5. Built-in defaults (gemma-270m)
+**Provider Router** (`chi_llm/providers/router.py`):
+- Central orchestrator selecting appropriate provider based on configuration
+- Falls back through provider hierarchy: Environment → Local → Global config
+- Manages provider lifecycle and error handling
 
-### CLI: `chi_llm/cli.py`
-- **500+ lines**: Comprehensive command-line interface
-- **Commands**: generate, chat, complete, ask, analyze, extract, summarize, translate, classify, template, rag, setup, models, interactive
-- **Model management**: List, switch, info commands
-- **RAG integration**: Query, add, search operations
+**Provider Types**:
+- `local`: Default llama.cpp provider using local GGUF models
+- `ollama`: Integration with Ollama server
+- `lmstudio`: LM Studio server integration
+- `openai`: OpenAI API (requires key)
+- `claude-cli`/`openai-cli`: CLI bridge providers
 
-### Setup Wizard: `chi_llm/setup.py`
-- **Interactive setup**: User-friendly model selection
-- **System detection**: RAM-based recommendations
-- **Download management**: HuggingFace integration
-- **Quick & advanced modes**: Different user expertise levels
+**Provider Discovery** (`chi_llm/providers/discovery.py`):
+- Auto-detects available providers on system
+- Checks for Ollama/LMStudio servers
+- Validates API keys and connectivity
 
-### RAG Module: `chi_llm/rag.py` (optional)
-- **MicroRAG class**: Vector-based document retrieval
-- **SQLite-vec backend**: Local vector storage
-- **Embeddings**: sentence-transformers models
-- **YAML config**: Configuration file support
+### Configuration Hierarchy
+Configuration resolution order (highest priority first):
+1. Environment variables (`CHI_LLM_MODEL`, `CHI_LLM_PROVIDER`)
+2. Local project config (`.chi_llm.json` in current directory)
+3. Parent project configs (searches up directory tree)
+4. Global user config (`~/.cache/chi_llm/model_config.json`)
+5. Built-in defaults (gemma-270m with local provider)
 
-### Prompt Templates: `chi_llm/prompts.py`
-- **Pre-built templates**: Code review, SQL generation, etc.
-- **Customizable**: Easy to extend with new templates
+### TUI System (Dual Implementation)
 
-## Model Configuration
+**Go TUI** (`go-chi/`):
+- Primary TUI using Bubble Tea framework
+- Located in `go-chi/internal/tui/`
+- Models, providers, diagnostics views
+- Mouse support, theming, animations
 
-### Default Model
-- **gemma-270m**: Ultra-lightweight (200MB), works everywhere
-- **Context**: 32,768 tokens (full capacity)
-- **Max tokens**: 4,096 (default response length)
+**Python TUI** (`chi_llm/tui/`):
+- Legacy Textual-based implementation
+- MVC architecture with store pattern
+- Controllers handle business logic
+- Views render UI components
 
-### Available Models
-- **Tiny (270M-0.6B)**: gemma-270m, qwen3-0.6b, qwen2.5-coder-0.5b - Fast, minimal RAM
-- **Small (1-2B)**: qwen3-1.7b, stablelm-2-1.6b, liquid-lfm2-1.2b, deepseek-r1-1.5b, qwen2.5-coder-1.5b
-- **Medium (2-4B)**: gemma2-2b, phi2-2.7b, stablelm-3b, qwen2.5-coder-3b, qwen3-4b (256K context!)
-- **Large (3-9B)**: phi3-mini, qwen3-8b, gemma2-9b, qwen2.5-coder-7b
+### Core Module Organization
 
-### Model Storage
-- **Location**: `~/.cache/chi_llm/`
-- **Format**: GGUF quantized (4-bit or 2-bit)
-- **Auto-download**: First use triggers download
+**Core LLM** (`chi_llm/core.py`):
+- `MicroLLM` class: Main interface, singleton pattern
+- Methods: generate, chat, complete, ask, analyze, extract, summarize, translate, classify
+- Handles both local and external providers
 
-## Configuration Management
+**Model Management** (`chi_llm/models.py`):
+- `ModelInfo` dataclass: Model metadata
+- `ModelManager`: Downloads, switching, configuration
+- 20+ curated models including specialized coding models
 
-### File Locations
-- **Global**: `~/.cache/chi_llm/model_config.json`
-- **Project**: `.chi_llm.json` (current or parent directories)
-- **Custom**: Via CHI_LLM_CONFIG environment variable
+**CLI System** (`chi_llm/cli_modules/`):
+- Modular command structure
+- `basic.py`: Core generation commands
+- `models.py`: Model management
+- `providers.py`: Provider configuration
+- `bootstrap.py`: Project initialization
+- `diagnostics.py`: System diagnostics
+- `ui.py`: TUI launcher (prefers Go, falls back to Python)
 
-### Configuration Schema
-```json
-{
-  "default_model": "model_id",
-  "downloaded_models": ["list", "of", "models"],
-  "preferred_context": 32768,
-  "preferred_max_tokens": 4096
-}
-```
+### RAG System (`chi_llm/rag.py`)
+- `MicroRAG` class: Vector-based retrieval
+- SQLite-vec backend for embeddings
+- FastEmbed/sentence-transformers support
+- YAML configuration support
 
-### Environment Variables
-- `CHI_LLM_MODEL`: Override default model
-- `CHI_LLM_CONFIG`: Custom config path
-- `CHI_LLM_CONTEXT`: Context window size
-- `CHI_LLM_MAX_TOKENS`: Max response tokens
+## Development Patterns & Conventions
+
+### Error Handling
+- Provider fallback chain for resilience
+- Graceful degradation when optional features unavailable
+- Clear error messages with actionable fixes
+
+### Testing Strategy
+- Mock model loading in tests using fixtures
+- Test provider discovery and routing separately
+- UI tests focus on store/controller logic
+- Integration tests for CLI commands
+
+### Code Organization
+- CLI modules are self-contained with argument parsers
+- Providers implement base interface
+- TUI uses MVC with reactive store
+- Configuration uses atomic file writes
+
+### Adding New Features
+
+**New Provider**:
+1. Create provider class in `chi_llm/providers/`
+2. Implement `BaseProvider` interface
+3. Add to router's provider map
+4. Add discovery logic if auto-detectable
+5. Write tests in `tests/test_provider_*.py`
+
+**New CLI Command**:
+1. Create module in `chi_llm/cli_modules/`
+2. Add `register_args()` and handler functions
+3. Import in `chi_llm/cli.py`
+4. Add to main argument parser
+5. Write tests in `tests/test_*_cli.py`
+
+**New Model**:
+1. Add to `MODELS` dict in `chi_llm/models.py`
+2. Include metadata: size, RAM, context, URL
+3. Test with smallest variant first
+4. Document in README's model section
 
 ## Important Notes
 
-- **Zero configuration**: Works out of the box with defaults
-- **100% local**: No API keys, no cloud dependencies
-- **Auto-caching**: Models downloaded once, reused forever
-- **CPU-friendly**: All models work on CPU (GPU optional)
-- **Context limits**: Respect model-specific context windows
-- **Prompt format**: Uses Gemma-style chat format
-- **Singleton pattern**: Model loaded once per process
-- **Thread-safe**: Uses locks for model loading
+- **Singleton Pattern**: Model loaded once per process, reused across instances
+- **Thread Safety**: Uses locks for model loading operations
+- **Config Atomicity**: All config writes use temp file + rename
+- **Provider Priority**: Local models preferred over external APIs
+- **Context Limits**: Respect model-specific context windows (8K-256K)
+- **Pre-commit Hooks**: Validate commit messages and file lengths
+- **Go Version**: Requires Go 1.25+ for TUI development
 
-## Testing Guidelines
+## Development Workflow & Standards
 
-- **Use smallest model**: gemma-270m for fast tests
-- **Mock model loading**: Use fixtures in tests/
-- **Check all methods**: Core has 10+ public methods
-- **Test configuration**: Verify hierarchy works
-- **CLI testing**: Test all subcommands
+### Kanban Workflow
+Track work using the Kanban system in `docs/kanban/`:
+- **TODO**: Plan tasks in `docs/kanban/todo/*.md` (one file per feature)
+- **In Progress**: Move file to `docs/kanban/inprogress/` when starting work
+- **Done**: Move to `docs/kanban/done/` when completed
+
+### Commit Standards
+Use Conventional Commits format:
+```
+type(scope): short imperative summary
+
+Body explaining what and why (wrap at 72 chars)
+
+Card-Id: XXX
+Refs: docs/kanban/todo/XXX-feature-name.md
+```
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `build`, `ci`, `revert`
+
+### Code Quality Requirements
+- **File Size**: Maximum 600 lines per file
+- **Testing**: Unit tests required for all new features
+- **Principles**: Apply Single Responsibility Principle and YAGNI
+- **Architecture**: Modular, extensible with clear interfaces
+- **Simplicity**: Avoid heavy plugin frameworks; prefer focused modules
+
+### Pre-commit Setup
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Install pre-commit hooks
+pre-commit install
+pre-commit install --hook-type commit-msg
+
+# Run on all files (optional first run)
+pre-commit run --all-files
+```
+
+### Documentation Standards
+- **Product Truth**: `README.md` (product overview), `CLAUDE.md` (dev reference)
+- **Supporting Docs**: `docs/CLI.md`, `docs/configuration.md`, `docs/architecture-principles.md`
+- **Roadmap**: Maintain in `docs/product/current/roadmap.md`
+- **Changelog**: Create in `docs/changelog/<timestamp>-<brief>.md`
+- **Language**: Code, comments, and permanent docs in English
+
+### Execution Protocol
+1. Create/update TODO card with scope and acceptance criteria
+2. Move card to In Progress when starting
+3. Before completing:
+   - Run full test suite: `python -m pytest tests -v`
+   - Format code: `black chi_llm/ tests/`
+   - Lint: `ruff check chi_llm/`
+   - Update relevant documentation
+4. Move card to Done and add changelog entry
+5. Commit atomically (one feature per commit)
+6. Push to `master` after validation (early development phase)
+
+### Environment & Permissions
+- Virtualenv is already configured and active
+- May install required Python packages for app operation
+- May run shell commands for development/maintenance
+- GitHub access available for direct `master` pushes (early phase)
+- Ask before force-pushing or changing repo visibility

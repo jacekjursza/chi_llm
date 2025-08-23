@@ -32,3 +32,27 @@ def test_providers_controller_set_and_test(monkeypatch):
 
     res = c.test({"type": "lmstudio", "host": "h", "port": 1})
     assert res["ok"] is True and res["models_count"] == 3
+
+
+def test_providers_controller_list_models(monkeypatch):
+    class FakeStore:
+        def __init__(self):
+            self._prov = {"type": "ollama", "host": "127.0.0.1", "port": 11434}
+
+        def get_provider(self):
+            return dict(self._prov)
+
+        def list_provider_models(self, provider=None):
+            return [
+                {
+                    "id": "qwen2.5-coder-0.5b",
+                    "name": "qwen2.5-coder-0.5b",
+                    "size": "0.5B",
+                }
+            ]
+
+    from chi_llm.tui.views.providers import ProvidersController
+
+    c = ProvidersController(FakeStore())
+    items = c.list_models({"type": "ollama", "host": "h", "port": 11434})
+    assert items and items[0]["id"].startswith("qwen2.5")

@@ -1,0 +1,32 @@
+{
+  "python": {
+    "version": "3.10.12",
+    "implementation": "CPython",
+    "ok": true
+  },
+  "node": {
+    "installed": true,
+    "npm": true,
+    "ok": true
+  },
+  "cache": {
+    "path": "/home/okhan/.cache/chi_llm",
+    "exists": true,
+    "writable": true,
+    "ok": true
+  },
+  "model": {
+    "current": "liquid-lfm2-1.2b",
+    "name": "Liquid LFM2 1.2B",
+    "recommended_ram_gb": 2.5,
+    "available_ram_gb": 8.0,
+    "fits": true,
+    "ok": true
+  },
+  "network": {
+    "hf": true,
+    "ok": true,
+    "status": 200,
+    "latency_ms": 186
+  }
+}

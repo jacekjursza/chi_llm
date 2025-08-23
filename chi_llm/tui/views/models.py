@@ -90,6 +90,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
     from textual.widgets import ListView, ListItem, Label, Static, Input
     from textual.reactive import reactive
     import threading
+    import time
 
     ctrl = ModelsController(store)
     models_all: List[Dict[str, Any]] = ctrl.list()
@@ -103,6 +104,8 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
             ("s", "set_default", "Set Default"),
             ("x", "download", "Download"),
             ("o", "toggle_sort", "Sort"),
+            ("g", "toggle_downloaded_filter", "Downloaded Only"),
+            ("v", "open_models_dir", "Open Dir"),
             ("f", "focus_filter", "Focus Filter"),
             ("l", "focus_list", "Focus List"),
         ]
@@ -110,6 +113,7 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
         selected_id: Optional[str] = reactive(None)
         sort_mode: str = reactive("id")  # id | name | size | downloaded
         downloading_model_id: Optional[str] = reactive(None)
+        filter_downloaded_only: bool = reactive(False)
 
         def compose(self) -> ComposeResult:  # type: ignore[override]
             with Vertical(id="left"):
@@ -128,10 +132,12 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                 yield Static("Select a model to see details.", id="details")
                 yield Label("Actions & Status")
                 yield Static(
-                    "Press [s]=Set, [x]=Download, [o]=Sort, [l]=List, [f]=Filter",
+                    "[s]=Set, [x]=Download, [o]=Sort, [g]=Downloaded, "
+                    "[v]=OpenDir, [l]=List, [f]=Filter",
                     id="hints",
                 )
                 yield Static("Sort: id", id="sort_label")
+                yield Static("Downloaded only: off", id="filter_label")
                 yield Static("Status: Idle", id="status_label")
                 yield Static("", id="progress")
                 yield Static("", id="op_msg")
@@ -201,7 +207,12 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                         " ".join(m.get("tags") or []),
                     ]
                 ).lower()
-                return q in hay
+                ok = q in hay
+                if ok and self.filter_downloaded_only:
+                    return bool(m.get("downloaded"))
+                return (
+                    ok if not self.filter_downloaded_only else bool(m.get("downloaded"))
+                )
 
             # sorting helpers
             def sort_key(m: Dict[str, Any]):
@@ -246,6 +257,16 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                 self.set_focus(self.query_one("#models_list"))
             except Exception:
                 pass
+
+        def action_toggle_downloaded_filter(self) -> None:  # type: ignore[override]
+            self.filter_downloaded_only = not self.filter_downloaded_only
+            try:
+                self.query_one("#filter_label", Static).update(
+                    f"Downloaded only: {'on' if self.filter_downloaded_only else 'off'}"
+                )
+            except Exception:
+                pass
+            self.on_input_changed(None)  # type: ignore[arg-type]
 
         # Actions bound via BINDINGS
         def action_set_default(self) -> None:  # type: ignore[override]
@@ -348,6 +369,8 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
 
             def _progress_loop():
                 pos = 0
+                prev_bytes = 0
+                prev_t = time.monotonic()
                 while not progress_stop.is_set():
                     text = None
                     if expected_path and target_bytes > 0 and expected_path.exists():
@@ -355,11 +378,23 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                             size = expected_path.stat().st_size
                             pct = min(99, int(size * 100 / max(target_bytes, 1)))
                             bars = int(pct / 5)
+                            # Best-effort ETA based on last interval
+                            now = time.monotonic()
+                            dt = max(1e-3, now - prev_t)
+                            speed = max(0.0, (size - prev_bytes) / dt)
+                            prev_bytes, prev_t = size, now
+                            eta_txt = ""
+                            if speed > 0:
+                                rem = max(0, target_bytes - size)
+                                eta_s = int(rem / speed)
+                                m, s = divmod(eta_s, 60)
+                                eta_txt = f" ETA ~ {m}m {s}s"
                             text = (
                                 "Progress: ["
                                 + "#" * bars
                                 + " " * (20 - bars)
                                 + f"] {pct}%"
+                                + eta_txt
                             )
                         except Exception:
                             text = None
@@ -427,5 +462,32 @@ def create_models_view(store) -> "object":  # return a Textual Widget instance
                     self.app.call_from_thread(_err)
 
             threading.Thread(target=_worker, daemon=True).start()
+
+        def action_open_models_dir(self) -> None:  # type: ignore[override]
+            from textual.widgets import Static
+            import sys
+            import os
+            import subprocess
+
+            try:
+                p = store.get_models_dir()
+                cmd_run = False
+                try:
+                    if sys.platform.startswith("darwin"):
+                        subprocess.Popen(["open", str(p)])
+                        cmd_run = True
+                    elif os.name == "nt":
+                        subprocess.Popen(["explorer", str(p)])
+                        cmd_run = True
+                    else:
+                        subprocess.Popen(["xdg-open", str(p)])
+                        cmd_run = True
+                except Exception:
+                    cmd_run = False
+                self.query_one("#op_msg", Static).update(
+                    f"Opened models directory: {p}" if cmd_run else f"Models dir: {p}"
+                )
+            except Exception as e:
+                self.query_one("#op_msg", Static).update(f"[red]Error:[/red] {e}")
 
     return ModelsView()

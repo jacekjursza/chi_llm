@@ -12,7 +12,15 @@ from typing import Any, Dict, Optional
 def create_config_view(store, initial_provider: Optional[str] = None) -> "object":
     from textual.app import ComposeResult
     from textual.containers import Vertical, VerticalScroll, Horizontal
-    from textual.widgets import Label, Button, Static, Input, Select
+    from textual.widgets import (
+        Label,
+        Button,
+        Static,
+        Input,
+        Select,
+        ListView,
+        ListItem,
+    )
     from textual.reactive import reactive
 
     from .models import create_models_view
@@ -46,6 +54,7 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
                 yield Button("Toggle Scope", id="scope_toggle")
                 yield Button("Test Connection", id="test_conn")
                 yield Button("Build Config", id="build_config")
+                yield Button("Back", id="back")
             yield Static("", id="status")
 
             # Body switches based on provider
@@ -93,6 +102,10 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
                 body.mount(Input(value=port, placeholder="11434", id="port"))
                 body.mount(Label("Model (optional)"))
                 body.mount(Input(value=model, placeholder="model-id", id="model"))
+                # Model browser controls
+                body.mount(Button("Browse Models", id="browse_models"))
+                body.mount(Static("", id="models_status"))
+                body.mount(ListView(id="models_list"))
 
             # No label update needed; Select displays current value
 
@@ -136,6 +149,19 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
                 self.scope = "global" if self.scope == "local" else "local"
                 self.query_one("#scope_label", Static).update(f"Scope: {self.scope}")
                 return
+            if event.button.id == "back":
+                # Navigate back to home (do not depend on app-local classes)
+                try:
+                    from textual.widgets import Static as _Static
+
+                    main = self.app.query_one("#main")  # type: ignore
+                    main.remove_children()
+                    main.mount(
+                        _Static("Back to home. Press m/p/d to open respective views.")
+                    )
+                except Exception:
+                    pass
+                return
             if event.button.id == "test_conn":
                 if self.current_type == "local":
                     self.query_one("#status", Static).update(
@@ -155,5 +181,55 @@ def create_config_view(store, initial_provider: Optional[str] = None) -> "object
                     f"Config saved to {self.scope}. Type={out.get('type')}"
                 )
                 return
+            if event.button.id == "browse_models":
+                if self.current_type == "local":
+                    self.query_one("#models_status", Static).update(
+                        "Local provider has no remote models to list."
+                    )
+                    return
+                prov = self._read_form()
+                try:
+                    items = ctrl.list_models(prov)
+                except Exception:
+                    items = []
+                # Populate the list view
+                try:
+                    lv = self.query_one("#models_list", ListView)
+                    lv.clear()
+                except Exception:
+                    lv = None
+                count = 0
+                if items and lv is not None:
+                    for m in items:
+                        label = f"{m.get('id')}  {m.get('size','') or ''}".strip()
+                        it = ListItem(Label(label))
+                        it.data = m
+                        lv.append(it)
+                        count += 1
+                self.query_one("#models_status", Static).update(
+                    f"Models: {count} found" if count else "No models found."
+                )
+                return
+
+        # Update model field when user selects a model from the list
+        def on_list_view_selected(self, event) -> None:  # type: ignore[override]
+            try:
+                if (
+                    getattr(getattr(event, "list_view", None), "id", "")
+                    != "models_list"
+                ):
+                    return
+                lv = self.query_one("#models_list", ListView)
+                if lv.index is None or lv.index < 0 or lv.index >= len(lv.children):
+                    return
+                item = lv.children[lv.index]
+                md = getattr(item, "data", None)
+                if isinstance(md, dict) and md.get("id"):
+                    self.query_one("#model", Input).value = str(md.get("id"))
+                    self.query_one("#status", Static).update(
+                        f"Selected model: {md.get('id')}"
+                    )
+            except Exception:
+                pass
 
     return ConfigView()

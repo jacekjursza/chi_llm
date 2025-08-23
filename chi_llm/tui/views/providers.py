@@ -21,6 +21,9 @@ class ProvidersController:
     def test(self, provider: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return self.store.test_connection(provider)
 
+    def list_models(self, provider: Optional[Dict[str, Any]] = None):
+        return self.store.list_provider_models(provider)
+
 
 def create_providers_view(store) -> "object":
     """Create an interactive Providers view bound to the store.

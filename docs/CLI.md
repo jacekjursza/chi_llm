@@ -348,6 +348,8 @@ chi-llm config set default_model qwen3-1.7b --scope local   # project
 chi-llm config set preferred_max_tokens 2048 --scope global # user
 ```
 
+Note: The primary interactive UI is now the Go TUI under `go-chi/`. The Textual UI is maintained for compatibility.
+
 ## Advanced Usage
 
 ### Piping and redirection
@@ -459,3 +461,13 @@ chi-llm --help
 chi-llm generate --help
 chi-llm rag query --help
 ```
+# Configuration UI (Go TUI)
+
+Primary TUI has moved to Go (Bubble Tea/Bubbles/Lip Gloss) under `go-chi/`.
+
+- Launch: `cd go-chi && go run ./cmd/chi-tui`
+- Sections: `1` Welcome, `2` Configure Provider, `3` (Re)Build Configuration
+- Keys: `↑/↓` or `k/j` navigate, `enter` select, `b` back, `t` theme, `a` animation, `q` quit
+- (Re)Build: Enter writes project `.chi_llm.json` with minimal provider config
+
+Legacy Python/Textual UI remains available temporarily via `chi-llm config` but is in maintenance mode.
