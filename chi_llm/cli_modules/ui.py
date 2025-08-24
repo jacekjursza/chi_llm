@@ -1,8 +1,9 @@
 """
 UI launcher command.
 
-Launches the Go-based TUI (go-chi/chi-tui) when available. The legacy
-Python/Textual UI has been removed.
+Prefers the new Rust/ratatui TUI (tui/chi-tui) when available. Falls back to
+the (retired) Go TUI only if present. The legacy Python/Textual UI has been
+removed.
 """
 
 from argparse import _SubParsersAction
@@ -19,29 +20,29 @@ except Exception:  # pragma: no cover
     ModelManager = None  # type: ignore
 
 
-def _print_go_tui_instructions():
-    print("❌ Interactive UI requires the Go TUI (Textual removed).")
-    print("   Install Go >= 1.21 and run one of:")
-    print("     • cd go-chi && go run ./cmd/chi-tui")
-    print("     • build once: cd go-chi && go build -o bin/chi-tui ./cmd/chi-tui")
-    print("       then: ./go-chi/bin/chi-tui")
+def _print_ui_instructions():
+    print("❌ Interactive UI not available in this install.")
+    print("   For development, build and run the Rust TUI:")
+    print("     • cd tui/chi-tui && cargo run")
+    print("     • or build: cd tui/chi-tui && cargo build --release")
+    print("       then: ./tui/chi-tui/target/release/chi-tui")
 
 
 def _find_repo_root(start: Path) -> Path | None:
     # Heuristic: package is at <root>/chi_llm/..., so root is two levels up
     for p in [start, *start.parents]:
-        if (p / ".git").exists() and (p / "go-chi").exists():
+        if (p / ".git").exists() and (p / "tui" / "chi-tui").exists():
             return p
     # Fallback: walk up 3 levels from this file
     guess = start
     for _ in range(3):
         guess = guess.parent
-    if (guess / "go-chi").exists():
+    if (guess / "tui" / "chi-tui").exists():
         return guess
     return None
 
 
-def _latest_mtime_in(dirpath: Path, patterns=("*.go",)) -> float:
+def _latest_mtime_in(dirpath: Path, patterns=("*.rs",)) -> float:
     latest = 0.0
     for root, _, _ in os.walk(dirpath):
         p = Path(root)
@@ -54,38 +55,76 @@ def _latest_mtime_in(dirpath: Path, patterns=("*.go",)) -> float:
     return latest
 
 
-def _parse_go_version(s: str) -> tuple[int, int]:
+def _parse_go_version(s: str) -> tuple[int, int]:  # kept for historical reasons
     m = re.search(r"go(\d+)\.(\d+)", s)
     if not m:
         return (0, 0)
     return (int(m.group(1)), int(m.group(2)))
 
 
-def _resolve_go_bin() -> str | None:
-    # Priority: GO_BIN env -> ~/.local/go/bin/go -> PATH
+def _resolve_cargo_bin() -> str | None:
+    # Priority: CARGO env -> PATH
     candidates: list[str] = []
-    env_bin = os.getenv("GO_BIN")
+    env_bin = os.getenv("CARGO")
     if env_bin:
         candidates.append(env_bin)
-    home_bin = os.path.expanduser("~/.local/go/bin/go")
-    candidates.append(home_bin)
-    path_bin = shutil.which("go")
+    path_bin = shutil.which("cargo")
     if path_bin:
         candidates.append(path_bin)
+    return candidates[0] if candidates else None
 
-    best: tuple[int, int] = (0, 0)
-    best_path: str | None = None
-    for c in candidates:
-        if not c:
-            continue
+
+def _try_launch_rust(ui_args, force_rebuild: bool = False) -> bool:
+    """Try to launch the Rust TUI from source tree. Returns True if executed
+    (regardless of exit code), False if not available.
+
+    Strategy:
+    - Locate repo root with tui/chi-tui
+    - Ensure binary exists or (re)build with cargo when stale
+    - Launch built binary, forwarding args
+    """
+    here = Path(__file__).resolve()
+    root = _find_repo_root(here)
+    if root is None:
+        return False
+    tui_dir = root / "tui" / "chi-tui"
+    if not tui_dir.exists():
+        return False
+
+    exe = "chi-tui.exe" if os.name == "nt" else "chi-tui"
+    bin_path = tui_dir / "target" / "release" / exe
+
+    should_build = force_rebuild or (not bin_path.exists())
+    if not should_build:
         try:
-            out = subprocess.check_output([c, "version"], text=True)
-            ver = _parse_go_version(out)
-            if ver > best:
-                best, best_path = ver, c
-        except Exception:
-            continue
-    return best_path
+            bin_mtime = bin_path.stat().st_mtime
+        except OSError:
+            bin_mtime = 0.0
+        src_mtime = max(
+            _latest_mtime_in(tui_dir, ("*.rs",)),
+            _latest_mtime_in(tui_dir, ("Cargo.toml",)),
+        )
+        if src_mtime > bin_mtime:
+            should_build = True
+
+    if should_build:
+        cargo = _resolve_cargo_bin()
+        if cargo is None:
+            print("❌ No Rust toolchain found. Install Rust (cargo) and try again.")
+            return False
+        try:
+            subprocess.run([cargo, "build", "--release"], cwd=str(tui_dir), check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to build Rust TUI with '{cargo}': {e}")
+            return False
+
+    # Launch binary
+    try:
+        subprocess.run([str(bin_path), *ui_args])
+        return True
+    except Exception as e:
+        print(f"❌ Failed to launch Rust TUI: {e}")
+        return False
 
 
 def _try_launch_go(ui_args, force_rebuild: bool = False) -> bool:
@@ -97,78 +136,22 @@ def _try_launch_go(ui_args, force_rebuild: bool = False) -> bool:
     - Ensure binary exists, attempt to build if missing
     - Exec the binary, forwarding args
     """
-    here = Path(__file__).resolve()
-    root = _find_repo_root(here)
-    if root is None:
-        return False
-    go_dir = root / "go-chi"
-    if not go_dir.exists():
-        return False
-
-    # Resolve binary path (handle Windows exe)
-    bin_dir = go_dir / "bin"
-    bin_dir.mkdir(exist_ok=True)
-    exe = "chi-tui.exe" if os.name == "nt" else "chi-tui"
-    bin_path = bin_dir / exe
-
-    should_build = force_rebuild or (not bin_path.exists())
-
-    if not should_build:
-        # Rebuild if sources are newer than binary
-        try:
-            bin_mtime = bin_path.stat().st_mtime
-        except OSError:
-            bin_mtime = 0.0
-        src_mtime = max(
-            _latest_mtime_in(go_dir / "cmd"),
-            _latest_mtime_in(go_dir / "internal"),
-            _latest_mtime_in(go_dir, ("go.mod", "go.sum")),
-        )
-        if src_mtime > bin_mtime:
-            should_build = True
-
-    if should_build:
-        # Attempt to build with the newest available Go
-        go = _resolve_go_bin()
-        if go is None:
-            # No Go toolchain available; can't launch Go TUI
-            print("❌ No Go toolchain found. Install Go >= 1.21 or add to PATH.")
-            print('   Tip: export PATH="$HOME/.local/go/bin:$PATH"')
-            return False
-        try:
-            subprocess.run(
-                [go, "build", "-o", str(bin_path), "./cmd/chi-tui"],
-                cwd=str(go_dir),
-                check=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to build Go TUI with '{go}': {e}")
-            if "/usr/bin/go" in go:
-                print("   System Go detected. Prefer ~/.local/go/bin/go (>= 1.21).")
-                print('   Tip: export PATH="$HOME/.local/go/bin:$PATH"')
-            return False
-
-    # Launch the Go TUI interactively, forwarding any UI args
-    try:
-        # Inherit TTY; don't use -once/-no-alt here so users get full UI
-        subprocess.run([str(bin_path), *ui_args])
-        # Return True: we attempted; even if non-zero, no fallback to Textual
-        return True
-    except Exception as e:
-        print(f"❌ Failed to launch Go TUI: {e}")
-        return False
+    # Disabled: Go TUI retired and removed from repo.
+    return False
 
 
 def cmd_ui(args):
     ui_args = getattr(args, "ui_args", []) or []
     force_rebuild = bool(
-        getattr(args, "go_rebuild", False) or os.getenv("CHI_LLM_GO_REBUILD") == "1"
+        getattr(args, "rebuild", False) or os.getenv("CHI_LLM_UI_REBUILD") == "1"
     )
-    # Launch Go TUI when available
+    # Try Rust TUI first
+    if _try_launch_rust(ui_args, force_rebuild=force_rebuild):
+        return
+    # Fallback to Go (retired) — currently disabled
     if _try_launch_go(ui_args, force_rebuild=force_rebuild):
         return
-    # No fallback: Textual UI was removed
-    _print_go_tui_instructions()
+    _print_ui_instructions()
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
@@ -236,7 +219,7 @@ def register(subparsers: _SubParsersAction):
     # Preferred command name
     cfg = subparsers.add_parser(
         "config",
-        help="Open the interactive configuration UI (Go TUI if available)",
+        help="Open the interactive configuration UI (Rust/ratatui)",
     )
     # Subcommands for config management: get/set
     cfg_sub = cfg.add_subparsers(dest="config_command")
@@ -257,20 +240,20 @@ def register(subparsers: _SubParsersAction):
 
     # No subcommand: launch the UI (default)
     cfg.add_argument(
-        "--go-rebuild",
+        "--rebuild",
         action="store_true",
-        help="Force rebuild the Go TUI before launch",
+        help="Force rebuild the UI before launch",
     )
     _register_common(cfg)
 
     # Alias for convenience/back-compat
     ui = subparsers.add_parser(
         "ui",
-        help="Open the configuration UI (Go TUI if available)",
+        help="Open the configuration UI (Rust/ratatui)",
     )
     ui.add_argument(
-        "--go-rebuild",
+        "--rebuild",
         action="store_true",
-        help="Force rebuild the Go TUI before launch",
+        help="Force rebuild the UI before launch",
     )
     _register_common(ui)
