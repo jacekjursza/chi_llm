@@ -20,6 +20,7 @@ use wait_timeout::ChildExt;
 use std::fs;
 use reqwest::blocking::Client;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use dirs;
 
 #[derive(Parser, Debug)]
 #[command(name = "chi-tui")] 
@@ -96,6 +97,8 @@ struct App {
     defaultp: Option<DefaultProviderState>,
     // providers catalog
     providers: Option<ProvidersState>,
+    // build config
+    build: Option<BuildState>,
 }
 
 impl App {
@@ -117,6 +120,7 @@ impl App {
             readme: None,
             defaultp: None,
             providers: None,
+            build: None,
         }
     }
 }
@@ -408,6 +412,25 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
     }
+
+    // Build/Write Configuration keys
+    if app.page == Page::Build {
+        if app.build.is_none() {
+            app.build = Some(BuildState::default());
+        }
+        if let Some(st) = &mut app.build {
+            match key.code {
+                KeyCode::Char('g') | KeyCode::Char('G') => { st.toggle_target(); }
+                KeyCode::Enter => {
+                    match write_active_config(st.target) {
+                        Ok(path) => st.status = Some(format!("Written: {}", path)),
+                        Err(e) => st.status = Some(format!("Error: {}", e)),
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 const WELCOME_ITEMS: &[(&str, Page)] = &[
@@ -438,7 +461,7 @@ fn ui(f: &mut Frame, app: &App) {
         Page::SelectDefault => draw_select_default(f, chunks[1], app),
         Page::ModelBrowser => draw_model_browser(f, chunks[1], app),
         Page::Diagnostics => draw_diagnostics(f, chunks[1], app),
-        Page::Build => draw_stub(f, chunks[1], app, "Build Config (stub) — Project/Global"),
+        Page::Build => draw_build_config(f, chunks[1], app),
         Page::Settings => draw_stub(f, chunks[1], app, "Settings (stub) — t/a toggles"),
     }
     draw_footer(f, chunks[2], app);
@@ -470,6 +493,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
         Page::Readme => "Up/Down scroll • PgUp/PgDn faster • h TOC • Esc back",
         Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
+        Page::Build => "g toggle target • Enter write • Esc back",
         Page::SelectDefault => "Up/Down select • Enter set default • Esc back",
         _ => "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
     };
@@ -512,6 +536,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
         Line::from("Configure: Up/Down • Enter/A add • D delete • S save • m model • E model • H host • P port • K key • B base_url • T test"),
         Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC"),
+        Line::from("Build: g toggle Project/Global • Enter write"),
         Line::from("Welcome: Up/Down + Enter to open a section"),
         Line::from("—").style(Style::default().fg(app.theme.frame)),
         Line::from("This is a scaffold. Pages will be implemented in tasks 003–009."),
@@ -711,6 +736,105 @@ struct ReadmeState {
 impl ReadmeState {
     fn scroll_up(&mut self, n: usize) { self.scroll = self.scroll.saturating_sub(n); }
     fn scroll_down(&mut self, n: usize) { self.scroll = self.scroll.saturating_add(n); }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum BuildTarget { Project, Global }
+
+#[derive(Clone, Debug, Default)]
+struct BuildState { target: BuildTarget, status: Option<String> }
+
+impl Default for BuildTarget { fn default() -> Self { BuildTarget::Project } }
+
+impl BuildState { fn toggle_target(&mut self) { self.target = match self.target { BuildTarget::Project => BuildTarget::Global, BuildTarget::Global => BuildTarget::Project }; } }
+
+fn draw_build_config(f: &mut Frame, area: Rect, app: &App) {
+    let mut lines: Vec<Line> = Vec::new();
+    let target = app.build.as_ref().map(|b| b.target).unwrap_or(BuildTarget::Project);
+    lines.push(Line::from(Span::styled("Build/Write Configuration", Style::default().fg(app.theme.primary).add_modifier(Modifier::BOLD))));
+    lines.push(Line::from(match target { BuildTarget::Project => "Target: Project (.chi_llm.json)", BuildTarget::Global => "Target: Global (~/.cache/chi_llm/model_config.json)" }));
+    // Show default provider summary
+    match get_default_provider_summary() {
+        Ok((id, ptype)) => lines.push(Line::from(format!("Default provider: {} [{}]", id, ptype))),
+        Err(e) => lines.push(Line::from(Span::styled(format!("Default provider not set: {}", e), Style::default().fg(Color::Red)))),
+    }
+    if let Some(st) = &app.build { if let Some(msg) = &st.status { lines.push(Line::from(Span::styled(msg.clone(), Style::default().fg(app.theme.secondary)))); } }
+    lines.push(Line::from("Press Enter to write; 'g' toggles target."));
+    let p = Paragraph::new(lines)
+        .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Build"))
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+    f.render_widget(p, area);
+}
+
+fn get_default_provider_summary() -> Result<(String, String)> {
+    let path = "chi.tmp.json";
+    let text = fs::read_to_string(path).map_err(|e| anyhow!("{}", e))?;
+    let v: Value = serde_json::from_str(&text)?;
+    let def = v.get("default_provider_id").and_then(|x| x.as_str()).ok_or_else(|| anyhow!("no default_provider_id in chi.tmp.json"))?;
+    if let Some(arr) = v.get("providers").and_then(|x| x.as_array()) {
+        for p in arr {
+            let id = p.get("id").and_then(|x| x.as_str()).unwrap_or("");
+            if id == def {
+                let ptype = p.get("type").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                return Ok((id.to_string(), ptype));
+            }
+        }
+    }
+    Err(anyhow!("default provider entry not found"))
+}
+
+fn write_active_config(target: BuildTarget) -> Result<String> {
+    let path = "chi.tmp.json";
+    let text = fs::read_to_string(path).map_err(|e| anyhow!("{}", e))?;
+    let v: Value = serde_json::from_str(&text)?;
+    let def = v.get("default_provider_id").and_then(|x| x.as_str()).ok_or_else(|| anyhow!("no default_provider_id in chi.tmp.json"))?;
+    let arr = v.get("providers").and_then(|x| x.as_array()).ok_or_else(|| anyhow!("no providers array in chi.tmp.json"))?;
+    let mut ptype = String::new();
+    let mut cfg = serde_json::Map::new();
+    for p in arr {
+        let id = p.get("id").and_then(|x| x.as_str()).unwrap_or("");
+        if id == def {
+            ptype = p.get("type").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            if let Some(c) = p.get("config").and_then(|x| x.as_object()) {
+                for (k, val) in c {
+                    if k == "type" { continue; }
+                    // include only non-empty fields
+                    let include = match val {
+                        Value::Null => false,
+                        Value::String(s) => !s.is_empty(),
+                        _ => true,
+                    };
+                    if include { cfg.insert(k.clone(), val.clone()); }
+                }
+            }
+            break;
+        }
+    }
+    if ptype.is_empty() { return Err(anyhow!("default provider type missing")); }
+    let mut out = serde_json::Map::new();
+    let mut pmap = serde_json::Map::new();
+    pmap.insert("type".to_string(), Value::String(ptype));
+    for (k, v) in cfg { pmap.insert(k, v); }
+    out.insert("provider".to_string(), Value::Object(pmap));
+    let json = Value::Object(out);
+    let written = match target {
+        BuildTarget::Project => {
+            let p = ".chi_llm.json";
+            fs::write(p, serde_json::to_vec_pretty(&json)?)?;
+            p.to_string()
+        }
+        BuildTarget::Global => {
+            let home = dirs::home_dir().ok_or_else(|| anyhow!("home dir not found"))?;
+            let dir = home.join(".cache").join("chi_llm");
+            fs::create_dir_all(&dir)?;
+            let p = dir.join("model_config.json");
+            fs::write(&p, serde_json::to_vec_pretty(&json)?)?;
+            p.to_string_lossy().to_string()
+        }
+    };
+    Ok(written)
 }
 
 fn load_readme() -> ReadmeState {
