@@ -1,6 +1,7 @@
 use std::io::{self, Stdout};
 use std::time::{Duration, Instant};
 use std::process::Command;
+use std::process::Stdio;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -13,6 +14,9 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Terminal;
+use ratatui::prelude::Frame;
+use serde_json::Value;
+use wait_timeout::ChildExt;
 
 #[derive(Parser, Debug)]
 #[command(name = "chi-tui")] 
@@ -77,6 +81,9 @@ struct App {
     theme: Theme,
     use_alt: bool,
     should_quit: bool,
+    // diagnostics
+    diag: Option<DiagState>,
+    last_error: Option<String>,
 }
 
 impl App {
@@ -91,6 +98,8 @@ impl App {
             theme: Theme::synthwave_dark(),
             use_alt,
             should_quit: false,
+            diag: None,
+            last_error: None,
         }
     }
 }
@@ -134,7 +143,37 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> R
         // ticks
         let timeout = tick_rate.saturating_sub(app.last_tick.elapsed());
         if event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? { handle_key(&mut app, key); }
+            if let Event::Key(key) = event::read()? {
+                // Diagnostics page extra keys
+                if app.page == Page::Diagnostics {
+                    match key.code {
+                        KeyCode::Char('e') | KeyCode::Char('E') => {
+                            if let Some(diag) = &app.diag {
+                                match export_diagnostics(diag) {
+                                    Ok(path) => {
+                                        if let Some(d) = &mut app.diag.clone() {
+                                            let mut d2 = d.clone();
+                                            d2.saved_path = Some(path);
+                                            app.diag = Some(d2);
+                                        }
+                                    }
+                                    Err(e) => app.last_error = Some(format!("Export failed: {e}")),
+                                }
+                            }
+                            continue;
+                        }
+                        KeyCode::Char('r') | KeyCode::Char('R') => {
+                            match fetch_diagnostics(Duration::from_secs(5)) {
+                                Ok(d) => app.diag = Some(d),
+                                Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
+                            }
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+                handle_key(&mut app, key);
+            }
         }
         if app.last_tick.elapsed() >= tick_rate {
             app.tick = app.tick.wrapping_add(1);
@@ -156,7 +195,15 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('1') => app.page = Page::Readme,
         KeyCode::Char('2') => app.page = Page::Configure,
         KeyCode::Char('3') => app.page = Page::SelectDefault,
-        KeyCode::Char('4') => app.page = Page::Diagnostics,
+        KeyCode::Char('4') => {
+            app.page = Page::Diagnostics;
+            if app.diag.is_none() {
+                match fetch_diagnostics(Duration::from_secs(5)) {
+                    Ok(d) => app.diag = Some(d),
+                    Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
+                }
+            }
+        }
         KeyCode::Char('b') | KeyCode::Char('B') => app.page = Page::Build,
         KeyCode::Char('s') | KeyCode::Char('S') => app.page = Page::Settings,
         KeyCode::Esc => {
@@ -174,6 +221,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             KeyCode::Down => { if app.menu_idx < WELCOME_ITEMS.len() - 1 { app.menu_idx += 1; } },
             KeyCode::Enter => {
                 app.page = WELCOME_ITEMS[app.menu_idx].1;
+                if app.page == Page::Diagnostics && app.diag.is_none() {
+                    match fetch_diagnostics(Duration::from_secs(5)) {
+                        Ok(d) => app.diag = Some(d),
+                        Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
+                    }
+                }
             }
             _ => {}
         }
@@ -191,7 +244,7 @@ const WELCOME_ITEMS: &[(&str, Page)] = &[
     ("EXIT", Page::Welcome),
 ];
 
-fn ui(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, app: &App) {
+fn ui(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -207,7 +260,7 @@ fn ui(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, app: &App) {
         Page::Configure => draw_stub(f, chunks[1], app, "Configure Providers (stub) — A/S/D/T/m to be implemented"),
         Page::SelectDefault => draw_stub(f, chunks[1], app, "Select Default (stub) — Enter to set"),
         Page::ModelBrowser => draw_stub(f, chunks[1], app, "Model Browser (stub) — r/f/i filters, Enter to select"),
-        Page::Diagnostics => draw_stub(f, chunks[1], app, "Diagnostics (stub) — e to export"),
+        Page::Diagnostics => draw_diagnostics(f, chunks[1], app),
         Page::Build => draw_stub(f, chunks[1], app, "Build Config (stub) — Project/Global"),
         Page::Settings => draw_stub(f, chunks[1], app, "Settings (stub) — t/a toggles"),
     }
@@ -216,7 +269,7 @@ fn ui(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, app: &App) {
     if app.show_help { draw_help_overlay(f, app); }
 }
 
-fn draw_header(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, app: &App) {
+fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     let title = neon_gradient_line(" chi_llm — micro‑LLM • TUI vNext ", app);
     let sub = Line::from(vec![
         Span::styled("  retro/synthwave • arrows + enter • ? help ", Style::default().fg(app.theme.secondary)),
@@ -235,11 +288,12 @@ fn draw_header(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, ap
     f.render_widget(p, area);
 }
 
-fn draw_footer(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, app: &App) {
-    let msg = Line::from(Span::styled(
-        "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
-        Style::default().fg(app.theme.secondary),
-    ));
+fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
+    let msg_text = match app.page {
+        Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
+        _ => "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
+    };
+    let msg = Line::from(Span::styled(msg_text, Style::default().fg(app.theme.secondary)));
     let p = Paragraph::new(msg)
         .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
         .block(Block::default())
@@ -247,7 +301,7 @@ fn draw_footer(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, ap
     f.render_widget(p, area);
 }
 
-fn draw_welcome(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, app: &App) {
+fn draw_welcome(f: &mut Frame, area: Rect, app: &App) {
     let items: Vec<ListItem> = WELCOME_ITEMS.iter().enumerate().map(|(i, (label, _))| {
         let style = if i == app.menu_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
         ListItem::new(Line::from(Span::styled(format!("{} {}", if i == app.menu_idx {"›"} else {" "}, label), style)))
@@ -258,7 +312,7 @@ fn draw_welcome(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, a
     f.render_widget(list, area);
 }
 
-fn draw_stub(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, app: &App, text: &str) {
+fn draw_stub(f: &mut Frame, area: Rect, app: &App, text: &str) {
     let p = Paragraph::new(text)
         .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
         .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)))
@@ -267,13 +321,14 @@ fn draw_stub(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, area: Rect, app:
     f.render_widget(p, area);
 }
 
-fn draw_help_overlay(f: &mut Terminal<CrosstermBackend<Stdout>>::Frame, app: &App) {
+fn draw_help_overlay(f: &mut Frame, app: &App) {
     let area = centered_rect(70, 60, f.size());
     let lines = vec![
         Line::from(Span::styled("Global keys:", Style::default().fg(app.theme.primary).add_modifier(Modifier::BOLD))),
         Line::from("Up/Down: navigate • Enter: select • Esc: back • q/Ctrl+C: quit"),
         Line::from("1: README • 2: Configure • 3: Select Default • 4: Diagnostics • b: Build • s: Settings"),
         Line::from("?: help overlay • t: theme • a: animation"),
+        Line::from("Diagnostics: e export • r refresh"),
         Line::from("Welcome: Up/Down + Enter to open a section"),
         Line::from("—").style(Style::default().fg(app.theme.frame)),
         Line::from("This is a scaffold. Pages will be implemented in tasks 003–009."),
@@ -314,3 +369,86 @@ fn neon_gradient_line(text: &str, app: &App) -> Line<'static> {
     Line::from(spans)
 }
 
+#[derive(Clone, Debug)]
+struct DiagState {
+    summary: Vec<String>,
+    diagnostics: Value,
+    model_explain: Value,
+    saved_path: Option<String>,
+}
+
+fn fetch_diagnostics(timeout: Duration) -> Result<DiagState> {
+    let diag = run_cli_json(&["diagnostics", "--json"], timeout)?;
+    let explain = run_cli_json(&["models", "current", "--explain", "--json"], timeout)?;
+    // Build a few summary lines
+    let mut summary = Vec::new();
+    if let Some(py) = diag.get("python").and_then(|v| v.get("version")).and_then(|v| v.as_str()) {
+        summary.push(format!("python: {}", py));
+    }
+    if let Some(cfg_src) = explain.get("config_source").and_then(|v| v.as_str()) {
+        summary.push(format!("config_source: {}", cfg_src));
+    }
+    if let Some(cur) = explain.get("current_model").and_then(|v| v.as_str()) {
+        summary.push(format!("current_model: {}", cur));
+    }
+    if let Some(rec) = explain.get("recommended_model").and_then(|v| v.as_str()) {
+        summary.push(format!("recommended_model: {}", rec));
+    }
+    if let Some(ram) = explain.get("available_ram_gb").and_then(|v| v.as_f64()) {
+        summary.push(format!("available_ram_gb: {:.1}", ram));
+    }
+    Ok(DiagState { summary, diagnostics: diag, model_explain: explain, saved_path: None })
+}
+
+fn export_diagnostics(d: &DiagState) -> Result<String> {
+    let obj = serde_json::json!({
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "diagnostics": d.diagnostics,
+        "model_explain": d.model_explain,
+    });
+    let path = "chi_llm_diagnostics.json".to_string();
+    std::fs::write(&path, serde_json::to_vec_pretty(&obj)?)?;
+    Ok(path)
+}
+
+fn run_cli_json(args: &[&str], timeout: Duration) -> Result<Value> {
+    let mut cmd = Command::new("chi-llm");
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    match child.wait_timeout(timeout)? {
+        Some(status) => {
+            if !status.success() {
+                let stderr = child.stderr.take().map(|mut s| {
+                    use std::io::Read; let mut buf = Vec::new(); let _ = s.read_to_end(&mut buf); String::from_utf8_lossy(&buf).to_string()
+                }).unwrap_or_default();
+                return Err(anyhow!("chi-llm {:?} failed: {}", args, stderr));
+            }
+        }
+        None => {
+            // timed out
+            let _ = child.kill();
+            return Err(anyhow!("chi-llm {:?} timed out after {:?}", args, timeout));
+        }
+    }
+    let output = child.wait_with_output()?;
+    let val: Value = serde_json::from_slice(&output.stdout)?;
+    Ok(val)
+}
+
+fn draw_diagnostics(f: &mut Frame, area: Rect, app: &App) {
+    let mut lines: Vec<Line> = Vec::new();
+    if let Some(err) = &app.last_error { lines.push(Line::from(Span::styled(err.clone(), Style::default().fg(Color::Red)))); }
+    if let Some(diag) = &app.diag {
+        lines.push(Line::from(Span::styled("Diagnostics summary:", Style::default().fg(app.theme.primary).add_modifier(Modifier::BOLD))));
+        for s in &diag.summary { lines.push(Line::from(s.as_str())); }
+        if let Some(path) = &diag.saved_path { lines.push(Line::from(Span::styled(format!("Exported: {}", path), Style::default().fg(app.theme.secondary)))); }
+    } else {
+        lines.push(Line::from("Loading diagnostics..."));
+    }
+    let p = Paragraph::new(lines)
+        .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Diagnostics"))
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+    f.render_widget(p, area);
+}
