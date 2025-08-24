@@ -28,7 +28,7 @@ use app::{App, Page, WELCOME_ITEMS};
 use build::{BuildState, BuildTarget, draw_build_config, write_active_config};
 use diagnostics::{draw_diagnostics, export_diagnostics, fetch_diagnostics};
 use models::{fetch_models, draw_model_browser};
-use providers::{ProvidersState, EditState, load_providers_state, draw_providers_catalog, probe_provider, load_providers_scratch, save_default_provider, draw_select_default};
+use providers::{ProvidersState, EditState, FormState, load_providers_state, draw_providers_catalog, probe_provider, load_providers_scratch, save_default_provider, draw_select_default};
 use readme::{load_readme, draw_readme};
 use util::{ensure_chi_llm, centered_rect, neon_gradient_line};
 
@@ -262,6 +262,36 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 }
                 return;
             }
+            // Schema-driven form mode
+            if let Some(form) = &mut st.form {
+                match key.code {
+                    KeyCode::Esc => { st.form = None; }
+                    KeyCode::Up => { if form.selected > 0 { form.selected -= 1; } }
+                    KeyCode::Down => { if form.selected + 1 < form.fields.len() { form.selected += 1; } }
+                    KeyCode::Enter => { form.editing = !form.editing; }
+                    KeyCode::Backspace => { if form.editing { if let Some(ch) = form.fields.get_mut(form.selected) { ch.buffer.pop(); } } }
+                    KeyCode::Tab => { if form.selected + 1 < form.fields.len() { form.selected += 1; } else { form.selected = 0; } }
+                    KeyCode::Char('s') | KeyCode::Char('S') => {
+                        // Save back to selected provider config
+                        if st.selected < st.entries.len() {
+                            if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
+                                for ff in &form.fields {
+                                    let key = ff.schema.name.clone();
+                                    if ff.schema.ftype == "int" {
+                                        if let Ok(n) = ff.buffer.parse::<i64>() { obj.insert(key, Value::Number(n.into())); } else { obj.insert(key, Value::String(ff.buffer.clone())); }
+                                    } else {
+                                        obj.insert(key, Value::String(ff.buffer.clone()));
+                                    }
+                                }
+                            }
+                        }
+                        st.form = None;
+                    }
+                    KeyCode::Char(c) => { if form.editing { if let Some(ch) = form.fields.get_mut(form.selected) { ch.buffer.push(c); } } }
+                    _ => { }
+                }
+                return;
+            }
 
             match key.code {
                 KeyCode::Up => { if st.selected > 0 { st.selected -= 1; } },
@@ -312,6 +342,26 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         match probe_provider(&st.entries[st.selected]) {
                             Ok(msg) => st.test_status = Some(msg),
                             Err(e) => st.test_status = Some(format!("Error: {}", e)),
+                        }
+                    }
+                }
+                KeyCode::Char('f') | KeyCode::Char('F') => {
+                    // Open dynamic form based on schema
+                    if st.selected < st.entries.len() {
+                        let ptype = st.entries[st.selected].ptype.clone();
+                        if let Some(fields) = st.schema_map.get(&ptype) {
+                            let mut ff = Vec::new();
+                            for sc in fields.iter() {
+                                let mut value = String::new();
+                                if let Some(cfg) = st.entries[st.selected].config.as_object() {
+                                    if let Some(v) = cfg.get(&sc.name) {
+                                        value = match v { Value::String(s) => s.clone(), other => other.to_string() };
+                                    }
+                                }
+                                if value.is_empty() { if let Some(d) = &sc.default { value = d.clone(); } }
+                                ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone() }, buffer: value });
+                            }
+                            st.form = Some(FormState { fields: ff, selected: 0, editing: false });
                         }
                     }
                 }
@@ -446,4 +496,3 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
     f.render_widget(Clear, area);
     f.render_widget(content, area);
 }
-

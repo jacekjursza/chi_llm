@@ -1,5 +1,6 @@
 use std::time::Duration;
 use std::fs;
+use std::collections::HashMap;
 
 use anyhow::Result;
 use ratatui::layout::Rect;
@@ -157,8 +158,10 @@ pub struct ProvidersState {
     pub entries: Vec<ProviderScratchEntry>,
     pub selected: usize,
     pub schema_types: Vec<String>,
+    pub schema_map: HashMap<String, Vec<FieldSchema>>, // type -> fields
     pub edit: Option<EditState>,
     pub test_status: Option<String>,
+    pub form: Option<FormState>,
 }
 
 impl ProvidersState {
@@ -167,8 +170,10 @@ impl ProvidersState {
             entries: Vec::new(),
             selected: 0,
             schema_types: Vec::new(),
+            schema_map: HashMap::new(),
             edit: None,
             test_status: None,
+            form: None,
         }
     }
     pub fn len_with_add(&self) -> usize {
@@ -250,15 +255,31 @@ pub struct EditState {
 }
 
 pub fn load_providers_state() -> Result<ProvidersState> {
-    // Load schema types
+    // Load schema types and fields
     let schema = run_cli_json(&["providers", "schema", "--json"], Duration::from_secs(5))?;
     let mut types: Vec<String> = Vec::new();
-    if let Some(obj) = schema.as_object() {
-        for k in obj.keys() {
-            types.push(k.to_string());
+    let mut schema_map: HashMap<String, Vec<FieldSchema>> = HashMap::new();
+    if let Some(arr) = schema.get("providers").and_then(|v| v.as_array()) {
+        for prov in arr {
+            if let Some(ptype) = prov.get("type").and_then(|v| v.as_str()) {
+                types.push(ptype.to_string());
+                let mut fields: Vec<FieldSchema> = Vec::new();
+                if let Some(farr) = prov.get("fields").and_then(|v| v.as_array()) {
+                    for f in farr {
+                        let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        if name.is_empty() { continue; }
+                        let ftype = f.get("type").and_then(|v| v.as_str()).unwrap_or("string").to_string();
+                        let required = f.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
+                        let default = if let Some(d) = f.get("default") { Some(d.to_string().trim_matches('"').to_string()) } else { None };
+                        let help = f.get("help").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        fields.push(FieldSchema { name, ftype, required, default, help });
+                    }
+                }
+                schema_map.insert(ptype.to_string(), fields);
+            }
         }
-        types.sort();
     }
+    types.sort();
     // Load scratch file
     let path = "chi.tmp.json";
     let text = fs::read_to_string(path).unwrap_or_else(|_| "{}".to_string());
@@ -303,8 +324,10 @@ pub fn load_providers_state() -> Result<ProvidersState> {
         entries,
         selected: 0,
         schema_types: types,
+        schema_map,
         edit: None,
         test_status: None,
+        form: None,
     })
 }
 
@@ -364,7 +387,7 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
         .highlight_style(Style::default().fg(app.theme.selected));
     f.render_widget(list, area);
 
-    // Input overlay for editing provider field
+    // Input overlay for editing provider field or schema-driven form
     if let Some(st) = &app.providers {
         if let Some(edit) = &st.edit {
             let area_pop = centered_rect(60, 30, area);
@@ -381,9 +404,49 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                 .wrap(Wrap { trim: true });
             f.render_widget(Clear, area_pop);
             f.render_widget(p, area_pop);
+        } else if let Some(form) = &st.form {
+            let area_pop = centered_rect(70, 70, area);
+            let mut lines: Vec<Line> = Vec::new();
+            lines.push(Line::from(Span::styled(
+                "Provider Form (↑/↓ select • Enter edit • s save • Esc close)",
+                Style::default().fg(app.theme.primary).add_modifier(Modifier::BOLD),
+            )));
+            for (i, ff) in form.fields.iter().enumerate() {
+                let req = if ff.schema.required { "*" } else { " " };
+                let label = format!("{} {}: {}", req, ff.schema.name, ff.buffer);
+                let style = if i == form.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                lines.push(Line::from(Span::styled(label, style)));
+            }
+            let p = Paragraph::new(lines)
+                .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(app.theme.frame))
+                        .title("Edit Provider"),
+                )
+                .alignment(ratatui::layout::Alignment::Left)
+                .wrap(Wrap { trim: true });
+            f.render_widget(Clear, area_pop);
+            f.render_widget(p, area_pop);
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct FieldSchema {
+    pub name: String,
+    pub ftype: String,
+    pub required: bool,
+    pub default: Option<String>,
+    pub help: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FormField { pub schema: FieldSchema, pub buffer: String }
+
+#[derive(Clone, Debug)]
+pub struct FormState { pub fields: Vec<FormField>, pub selected: usize, pub editing: bool }
 
 pub fn probe_provider(entry: &ProviderScratchEntry) -> Result<String> {
     let ptype = entry.ptype.as_str();
@@ -490,4 +553,3 @@ pub fn probe_provider(entry: &ProviderScratchEntry) -> Result<String> {
         _ => Ok(format!("{}: no test implemented", ptype)),
     }
 }
-
