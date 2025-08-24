@@ -84,6 +84,9 @@ struct App {
     // diagnostics
     diag: Option<DiagState>,
     last_error: Option<String>,
+    // model browser
+    model: Option<ModelBrowser>,
+    selected_model_id: Option<String>,
 }
 
 impl App {
@@ -100,6 +103,8 @@ impl App {
             should_quit: false,
             diag: None,
             last_error: None,
+            model: None,
+            selected_model_id: None,
         }
     }
 }
@@ -231,6 +236,30 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             _ => {}
         }
     }
+
+    // Model Browser keys
+    if app.page == Page::ModelBrowser {
+        if app.model.is_none() {
+            match fetch_models(Duration::from_secs(5)) {
+                Ok(m) => app.model = Some(m),
+                Err(e) => app.last_error = Some(format!("Models failed: {e}")),
+            }
+        }
+        if let Some(m) = &mut app.model {
+            match key.code {
+                KeyCode::Up => m.move_up(),
+                KeyCode::Down => m.move_down(),
+                KeyCode::Char('r') | KeyCode::Char('R') => m.toggle_downloaded_only(),
+                KeyCode::Char('f') | KeyCode::Char('F') => m.cycle_tag(),
+                KeyCode::Char('i') | KeyCode::Char('I') => m.show_info = !m.show_info,
+                KeyCode::Enter => {
+                    if let Some(cur) = m.current_entry() { app.selected_model_id = Some(cur.id.clone()); }
+                    app.page = Page::Configure; // return to configure with selected model id
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 const WELCOME_ITEMS: &[(&str, Page)] = &[
@@ -257,9 +286,9 @@ fn ui(f: &mut Frame, app: &App) {
     match app.page {
         Page::Welcome => draw_welcome(f, chunks[1], app),
         Page::Readme => draw_stub(f, chunks[1], app, "README Viewer (stub) — use 1/2/3/4/b/s or Esc"),
-        Page::Configure => draw_stub(f, chunks[1], app, "Configure Providers (stub) — A/S/D/T/m to be implemented"),
+        Page::Configure => draw_stub(f, chunks[1], app, &format!("Configure Providers (stub) — A/S/D/T/m to be implemented{}", match &app.selected_model_id { Some(id) => format!(" • selected model: {}", id), None => String::new() })),
         Page::SelectDefault => draw_stub(f, chunks[1], app, "Select Default (stub) — Enter to set"),
-        Page::ModelBrowser => draw_stub(f, chunks[1], app, "Model Browser (stub) — r/f/i filters, Enter to select"),
+        Page::ModelBrowser => draw_model_browser(f, chunks[1], app),
         Page::Diagnostics => draw_diagnostics(f, chunks[1], app),
         Page::Build => draw_stub(f, chunks[1], app, "Build Config (stub) — Project/Global"),
         Page::Settings => draw_stub(f, chunks[1], app, "Settings (stub) — t/a toggles"),
@@ -291,6 +320,7 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let msg_text = match app.page {
         Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
+        Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
         _ => "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
     };
     let msg = Line::from(Span::styled(msg_text, Style::default().fg(app.theme.secondary)));
@@ -329,6 +359,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("1: README • 2: Configure • 3: Select Default • 4: Diagnostics • b: Build • s: Settings"),
         Line::from("?: help overlay • t: theme • a: animation"),
         Line::from("Diagnostics: e export • r refresh"),
+        Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
         Line::from("Welcome: Up/Down + Enter to open a section"),
         Line::from("—").style(Style::default().fg(app.theme.frame)),
         Line::from("This is a scaffold. Pages will be implemented in tasks 003–009."),
@@ -451,4 +482,133 @@ fn draw_diagnostics(f: &mut Frame, area: Rect, app: &App) {
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: true });
     f.render_widget(p, area);
+}
+
+#[derive(Clone, Debug)]
+struct ModelEntry {
+    id: String,
+    name: String,
+    size: Option<String>,
+    file_size_mb: Option<u64>,
+    context_window: Option<u64>,
+    tags: Vec<String>,
+    downloaded: bool,
+    current: bool,
+    raw: Value,
+}
+
+#[derive(Clone, Debug)]
+struct ModelBrowser {
+    entries: Vec<ModelEntry>,
+    filtered: Vec<usize>,
+    selected: usize, // index in filtered
+    downloaded_only: bool,
+    tag_filter: Option<String>,
+    show_info: bool,
+    all_tags: Vec<String>,
+}
+
+impl ModelBrowser {
+    fn compute_filtered(&mut self) {
+        self.filtered.clear();
+        for (i, e) in self.entries.iter().enumerate() {
+            if self.downloaded_only && !e.downloaded { continue; }
+            if let Some(tag) = &self.tag_filter {
+                if !e.tags.iter().any(|t| t == tag) { continue; }
+            }
+            self.filtered.push(i);
+        }
+        if self.filtered.is_empty() { self.selected = 0; } else if self.selected >= self.filtered.len() { self.selected = self.filtered.len() - 1; }
+    }
+    fn move_up(&mut self) { if !self.filtered.is_empty() && self.selected > 0 { self.selected -= 1; } }
+    fn move_down(&mut self) { if !self.filtered.is_empty() && self.selected + 1 < self.filtered.len() { self.selected += 1; } }
+    fn toggle_downloaded_only(&mut self) { self.downloaded_only = !self.downloaded_only; self.compute_filtered(); }
+    fn cycle_tag(&mut self) {
+        if self.all_tags.is_empty() { return; }
+        match &self.tag_filter {
+            None => { self.tag_filter = Some(self.all_tags[0].clone()); }
+            Some(cur) => {
+                let mut idx = self.all_tags.iter().position(|t| t == cur).unwrap_or(0);
+                idx = (idx + 1) % (self.all_tags.len() + 1); // +1 to allow none state
+                if idx >= self.all_tags.len() { self.tag_filter = None; } else { self.tag_filter = Some(self.all_tags[idx].clone()); }
+            }
+        }
+        self.compute_filtered();
+    }
+    fn current_entry(&self) -> Option<&ModelEntry> { self.filtered.get(self.selected).map(|&i| &self.entries[i]) }
+}
+
+fn fetch_models(timeout: Duration) -> Result<ModelBrowser> {
+    let arr = run_cli_json(&["models", "list", "--json"], timeout)?;
+    let mut entries: Vec<ModelEntry> = Vec::new();
+    let mut tagset: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if let Some(list) = arr.as_array() {
+        for v in list {
+            let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let name = v.get("name").and_then(|x| x.as_str()).unwrap_or(&id).to_string();
+            let size = v.get("size").and_then(|x| x.as_str()).map(|s| s.to_string());
+            let file_size_mb = v.get("file_size_mb").and_then(|x| x.as_u64());
+            let context_window = v.get("context_window").and_then(|x| x.as_u64());
+            let tags: Vec<String> = v.get("tags").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|t| t.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
+            for t in &tags { tagset.insert(t.clone()); }
+            let downloaded = v.get("downloaded").and_then(|x| x.as_bool()).unwrap_or(false);
+            let current = v.get("current").and_then(|x| x.as_bool()).unwrap_or(false);
+            entries.push(ModelEntry { id, name, size, file_size_mb, context_window, tags, downloaded, current, raw: v.clone() });
+        }
+    }
+    let all_tags = tagset.into_iter().collect();
+    let mut mb = ModelBrowser { entries, filtered: Vec::new(), selected: 0, downloaded_only: false, tag_filter: None, show_info: false, all_tags };
+    mb.compute_filtered();
+    Ok(mb)
+}
+
+fn draw_model_browser(f: &mut Frame, area: Rect, app: &App) {
+    let mut upper = area;
+    let mut lower = area;
+    let show_info = app.model.as_ref().map(|m| m.show_info).unwrap_or(false);
+    if show_info { // split 70/30
+        let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Percentage(70), Constraint::Percentage(30)]).split(area);
+        upper = chunks[0]; lower = chunks[1];
+    }
+    let mut items: Vec<ListItem> = Vec::new();
+    if let Some(mb) = &app.model {
+        for (pos, &idx) in mb.filtered.iter().enumerate() {
+            let e = &mb.entries[idx];
+            let mut label = format!("{} {}", if pos == mb.selected {"›"} else {" "}, e.name);
+            if e.current { label.push_str("  [current]"); }
+            if e.downloaded { label.push_str("  [downloaded]"); }
+            if let Some(ref tag) = mb.tag_filter { label.push_str(&format!("  [tag:{}]", tag)); }
+            let style = if pos == mb.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+            items.push(ListItem::new(Line::from(Span::styled(label, style))));
+        }
+    } else {
+        items.push(ListItem::new("Loading models..."));
+    }
+    let title = if let Some(mb) = &app.model {
+        let mut t = String::from("Models");
+        if mb.downloaded_only { t.push_str(" • downloaded-only"); }
+        if let Some(tag) = &mb.tag_filter { t.push_str(&format!(" • tag:{}", tag)); }
+        t
+    } else { String::from("Models") };
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title))
+        .highlight_style(Style::default().fg(app.theme.selected));
+    f.render_widget(list, upper);
+
+    if show_info {
+        let mut lines: Vec<Line> = Vec::new();
+        if let Some(mb) = &app.model { if let Some(e) = mb.current_entry() {
+            lines.push(Line::from(Span::styled(format!("{} ({})", e.name, e.id), Style::default().fg(app.theme.primary).add_modifier(Modifier::BOLD))));
+            if let Some(s) = &e.size { lines.push(Line::from(format!("size: {}", s))); }
+            if let Some(fs) = e.file_size_mb { lines.push(Line::from(format!("file_size_mb: {}", fs))); }
+            if let Some(ctx) = e.context_window { lines.push(Line::from(format!("context_window: {}", ctx))); }
+            if !e.tags.is_empty() { lines.push(Line::from(format!("tags: {}", e.tags.join(", ")))); }
+        }}
+        let p = Paragraph::new(lines)
+            .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Info"))
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true });
+        f.render_widget(p, lower);
+    }
 }
