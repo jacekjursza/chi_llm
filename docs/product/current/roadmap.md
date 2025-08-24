@@ -9,7 +9,7 @@
 - Performance & UX (streaming, async, optional GPU)
 - Knowledge features (RAG polish)
 - Distribution & adoption (PyPI, docs site)
-- Go TUI Migration (replace legacy Textual UI)
+- Rust TUI Adoption (replace legacy Textual/Go UIs)
 
 ## Milestones
 - M1: Packaging & Onboarding
@@ -26,11 +26,11 @@
 - M4: RAG v2 Polish
   - Simplified config, better sources, indexing ergonomics
   - Acceptance: example showing sources + persistent DB
-- M5: Go TUI Parity (Bubble Tea)
-  - Migrate TUI features from Textual to Go (Bubble Tea/Bubbles/Lip Gloss)
+- M5: Rust TUI Parity (ratatui)
+  - Provide full feature parity in Rust (`ratatui` + `crossterm`).
   - Screens: Welcome, Configure Provider (with model browser), Models (manage/download/remove), Diagnostics, (Re)Build/Save config
-  - Acceptance: `go run ./go-chi/cmd/chi-tui` covers parity scenarios; minimal tests under `go-chi/internal/...`
-- M6: TUI Bootstrap Wizard (Go)
+  - Acceptance: `chi-llm ui` launches Rust TUI and covers parity scenarios; sources under `tui/chi-tui/`.
+- M6: TUI Bootstrap Wizard (Rust)
   - In-app bootstrap flow to scaffold project config
   - Acceptance: guided wizard writes `.chi_llm.json/.yaml`, `.env.sample`, `llm-requirements.txt`
 - M6: Providers (Optional)
@@ -41,4 +41,4 @@
 - Keep zero‑config path working at all times.
 - Prefer incremental, test‑backed changes; add unit tests per feature.
 - Reference architecture principles: `docs/architecture-principles.md`.
- - Python Textual UI enters maintenance mode; all new TUI work targets `go-chi/`.
+- Go TUI retired; all new TUI work targets `tui/chi-tui/` (Rust/ratatui).

@@ -55,16 +55,16 @@ pip install -e ".[full]"
 python -m build
 ```
 
-### Go TUI Development
+### Rust TUI Development
 ```bash
-# Run Go TUI
-cd go-chi && go run ./cmd/chi-tui
+# Run Rust TUI (from repo root)
+cd tui/chi-tui && cargo run
 
-# Run Go tests
-cd go-chi && go test ./...
+# Build release binary
+cd tui/chi-tui && cargo build --release
 
-# Build Go TUI binary
-cd go-chi && go build -o chi-tui ./cmd/chi-tui
+# Optional: pass args through CLI
+# chi-llm ui -- --no-alt
 ```
 
 ## Architecture & Key Components
@@ -99,13 +99,13 @@ Configuration resolution order (highest priority first):
 
 ### TUI System
 
-**Go TUI** (`go-chi/`):
-- Primary and only interactive TUI using Bubble Tea framework
-- Located in `go-chi/internal/tui/`
-- Models, providers, diagnostics views
-- Mouse support, theming, animations
+**Rust TUI** (`tui/chi-tui/`):
+- Primary interactive UI using `ratatui` + `crossterm`.
+- Launched via `chi-llm ui` (auto-builds with cargo if needed).
+- Includes: Welcome, Configure Providers (with model browser), Diagnostics, (Re)Build.
+- Keyboard-driven with optional theming and animations.
 
-Note: The legacy Python/Textual UI has been removed.
+Note: The legacy Python/Textual and Go TUIs have been removed/retired.
 
 ### Core Module Organization
 
@@ -126,7 +126,7 @@ Note: The legacy Python/Textual UI has been removed.
 - `providers.py`: Provider configuration
 - `bootstrap.py`: Project initialization
 - `diagnostics.py`: System diagnostics
-- `ui.py`: TUI launcher (prefers Go, falls back to Python)
+- `ui.py`: TUI launcher (builds/launches Rust TUI)
 
 ### RAG System (`chi_llm/rag.py`)
 - `MicroRAG` class: Vector-based retrieval
@@ -183,7 +183,7 @@ Note: The legacy Python/Textual UI has been removed.
 - **Provider Priority**: Local models preferred over external APIs
 - **Context Limits**: Respect model-specific context windows (8K-256K)
 - **Pre-commit Hooks**: Validate commit messages and file lengths
-- **Go Version**: Requires Go 1.25+ for TUI development
+- **Rust Toolchain**: Requires Rust/cargo for TUI development
 
 ## Development Workflow & Standards
 
