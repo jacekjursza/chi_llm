@@ -4,9 +4,26 @@ chi_llm supports flexible configuration management with a clear hierarchy that a
 
 ## Configuration Hierarchy
 
-Configuration sources are checked in this order (highest priority first):
+By default chi_llm uses a project-first order. You can switch to env-first for
+CI/12-factor style deployments.
 
-### 1. Environment Variables (Highest Priority)
+Default order (highest priority first):
+
+1. Code/CLI (explicit parameters)
+2. Local project config (in CWD)
+3. Parent project config (nearest in parents)
+4. Environment variables (including CHI_LLM_CONFIG)
+5. Global user config (opt-in; disabled by default)
+
+Env-first mode (set `CHI_LLM_RESOLUTION_MODE=env-first`):
+
+1. Code/CLI (explicit parameters)
+2. Environment variables (including CHI_LLM_CONFIG)
+3. Local project config
+4. Parent project config
+5. Global user config (opt-in)
+
+### Environment Variables
 Override any setting via environment:
 
 ```bash
@@ -21,6 +38,10 @@ export CHI_LLM_CONTEXT=16384
 
 # Set max response tokens
 export CHI_LLM_MAX_TOKENS=2048
+
+# Resolution controls
+export CHI_LLM_RESOLUTION_MODE=project-first   # or env-first
+export CHI_LLM_ALLOW_GLOBAL=0                  # set to 1 to enable global config
 ```
 
 Perfect for:
@@ -63,7 +84,7 @@ Benefits:
 - Workspace-wide settings
 - Nested project inheritance
 
-### 4. Global User Config
+### 4. Global User Config (opt-in)
 `~/.cache/chi_llm/model_config.json`:
 
 ```json
@@ -74,6 +95,9 @@ Benefits:
   "preferred_max_tokens": 4096
 }
 ```
+
+Global is disabled by default. Enable via `CHI_LLM_ALLOW_GLOBAL=1` or by adding
+`{"allow_global": true}` to your local project config.
 
 Set via:
 - `chi-llm setup` - Interactive wizard
@@ -137,8 +161,10 @@ chi-llm setup
 from chi_llm import MicroLLM
 
 # Uses configuration hierarchy automatically:
+# - Project-first by default (or env-first when configured)
 # - Honors per-project default_model from .chi_llm.json/.yaml
 # - Honors CHI_LLM_MODEL env var
+# - Global config applies only when allowed
 # - Falls back to built-in defaults when no config
 llm = MicroLLM()
 ```
@@ -272,8 +298,11 @@ JSON:
 ```
 
 Notes:
-- If `type` is `local` and `model` is provided, `MicroLLM` uses it when `model_id` isn’t passed explicitly.
-- Non-local providers are added incrementally; using an unimplemented provider type will raise a clear runtime error once integrated.
+- For `type: local`, the single source of truth for the local GGUF model is
+  `default_model`. `provider.model` acts only as a fallback when no
+  `default_model` is provided by any source.
+- Non-local providers are added incrementally; using an unimplemented provider
+  type will raise a clear runtime error once integrated.
 
 ### Environment Variables
 
@@ -445,7 +474,11 @@ Complete configuration file schema:
       "timeout": "number (seconds, optional)"
     }
   ]
+  ,
+  "allow_global": "boolean (default: false)",
+  "resolution_mode": "string (project-first|env-first, default: project-first)"
 }
 ```
 
-Note: Not all fields are required. Missing fields use defaults from lower priority sources.
+Notes:
+- Not all fields are required. Missing fields use defaults from lower priority sources.

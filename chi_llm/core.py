@@ -58,6 +58,7 @@ class MicroLLM:
         self._provider_error: Optional[str] = None
         self._router = None  # Multi-provider router when configured
         self.tags: Optional[List[str]] = None
+        provider_local_model: Optional[str] = None
         try:
             cfg = load_config()
             provider = cfg.get("provider") if isinstance(cfg, dict) else None
@@ -72,11 +73,11 @@ class MicroLLM:
                     self._router = None
             if isinstance(provider, dict) and provider.get("type"):
                 self.provider_config = provider
-                # If a local provider specifies model id and none was passed, use it
-                if provider.get("type") == "local" and not self.model_id:
+                # Capture local provider model as a fallback only
+                if provider.get("type") == "local":
                     prov_model = provider.get("model")
                     if isinstance(prov_model, str) and prov_model:
-                        self.model_id = prov_model
+                        provider_local_model = prov_model
                 elif provider.get("type") == "lmstudio":
                     # Initialize LM Studio provider; do not load local model
                     try:
@@ -172,24 +173,24 @@ class MicroLLM:
             # Fail closed: ignore provider config issues to preserve zero-config UX
             pass
 
-        # Honor per-project/global default model when explicitly configured
-        # via environment (CHI_LLM_MODEL) or config files discovered by ModelManager.
-        if self.model_id is None and HAS_MODEL_MANAGER:
+        # Resolve model via ModelManager (respects env/local/project/global rules)
+        if HAS_MODEL_MANAGER:
             try:
                 from .models import ModelManager  # local import to avoid cycles
 
                 manager = ModelManager()
-                has_env_model = bool(os.environ.get("CHI_LLM_MODEL"))
-                stats = manager.get_model_stats()
-                # Use manager only if a real config source exists or env model set
-                if has_env_model or stats.get("config_source") in {
-                    "local",
-                    "project",
-                    "global",
-                    "env",
-                    "custom",
-                }:
-                    self.model_id = manager.get_current_model().id
+                resolved_id = manager.get_current_model().id
+                # If user did not pass model_id explicitly, use manager's choice
+                if self.model_id is None:
+                    self.model_id = resolved_id
+                # If manager's choice is only the built-in default and a local
+                # provider model is declared, prefer provider as a fallback.
+                if (
+                    provider_local_model
+                    and self.model_id == resolved_id
+                    and not manager.has_explicit_default()
+                ):
+                    self.model_id = provider_local_model
             except Exception:
                 # If anything goes wrong, proceed with legacy fallback
                 pass

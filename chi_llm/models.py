@@ -273,8 +273,21 @@ class ModelManager:
     """
 
     def __init__(self, config_path: Optional[str] = None):
+        # Resolution controls
+        self.resolution_mode = os.environ.get(
+            "CHI_LLM_RESOLUTION_MODE", "project-first"
+        ).strip()
+        self.allow_global = os.environ.get("CHI_LLM_ALLOW_GLOBAL", "0").strip() in {
+            "1",
+            "true",
+            "True",
+        }
+
         self.config_paths = self._get_config_paths(config_path)
-        self.config_file = self.config_paths["global"]  # For saving
+        # For saving (global user config)
+        self.config_file = self.config_paths["global"]
+        # Tracks whether default_model came from an explicit source (not built-in)
+        self._explicit_default: bool = False
         self.load_config()
 
     def _get_config_paths(self, custom_path: Optional[str] = None) -> Dict[str, Path]:
@@ -309,37 +322,55 @@ class ModelManager:
         return paths
 
     def load_config(self):
-        """Load model configuration from multiple sources."""
-        # Start with defaults
+        """Load config with precedence and flags.
+
+        Default (project-first): local -> project -> env-file -> custom -> [global*]
+        Env-first: env-file -> local -> project -> custom -> [global*]
+        * Global applies only when CHI_LLM_ALLOW_GLOBAL is set truthy or enabled
+          in project config. CHI_LLM_MODEL always overrides explicitly.
+        """
+        # Base defaults
         self.config = {
-            "default_model": "gemma-270m",
+            # default_model intentionally assigned later; track explicitness
             "downloaded_models": [],
             "preferred_context": 8192,
             "preferred_max_tokens": 4096,
         }
 
-        # Load configs in reverse priority (so higher priority overwrites)
-        config_sources = ["global", "project", "local", "env", "custom"]
+        # Peek flags from project files if not set in env
+        self._apply_peek_flags()
 
-        for source in config_sources:
-            if source in self.config_paths:
-                config_path = self.config_paths[source]
-                if config_path.exists():
-                    try:
-                        with open(config_path, "r") as f:
-                            loaded = json.load(f)
-                            # Merge configurations
-                            self.config.update(loaded)
-                            logger.debug(f"Loaded config from {source}: {config_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to load config from {config_path}: {e}")
+        # Determine ordered sources
+        sources: List[str]
+        if self.resolution_mode == "env-first":
+            sources = ["env", "local", "project", "custom"]
+        else:  # project-first (default)
+            sources = ["local", "project", "env", "custom"]
+        if self.allow_global:
+            sources.append("global")
 
-        # Environment variable overrides for specific settings
-        if "CHI_LLM_MODEL" in os.environ:
-            model_id = os.environ["CHI_LLM_MODEL"]
-            if model_id in MODELS:
-                self.config["default_model"] = model_id
-                logger.debug(f"Using model from env: {model_id}")
+        # Apply file-based sources
+        for source in sources:
+            if source not in self.config_paths:
+                continue
+            path = self.config_paths[source]
+            if not path:
+                continue
+            try:
+                if path.exists():
+                    with open(path, "r") as f:
+                        loaded = json.load(f)
+                    self._merge_loaded_config(loaded)
+                    logger.debug(f"Loaded config from {source}: {path}")
+            except Exception as e:
+                logger.warning(f"Failed to load config from {path}: {e}")
+
+        # Environment variable overrides (highest)
+        model_id = os.environ.get("CHI_LLM_MODEL")
+        if model_id and model_id in MODELS:
+            self.config["default_model"] = model_id
+            self._explicit_default = True
+            logger.debug(f"Using model from env: {model_id}")
 
         if "CHI_LLM_CONTEXT" in os.environ:
             try:
@@ -354,6 +385,51 @@ class ModelManager:
                 )
             except ValueError:
                 pass
+
+        # Fill built-in default if still unset
+        if not self.config.get("default_model"):
+            self.config["default_model"] = "gemma-270m"
+            # Only built-in, keep _explicit_default as-is (likely False)
+
+    def _apply_peek_flags(self) -> None:
+        """Peek allow_global/resolution_mode from project files (env wins)."""
+        # If env provided, keep as-is; otherwise peek files
+        if os.environ.get("CHI_LLM_RESOLUTION_MODE") is None:
+            # Try local first
+            local = self.config_paths.get("local")
+            project = self.config_paths.get("project")
+            for p in [local, project]:
+                try:
+                    if p and p.exists():
+                        data = json.loads(p.read_text(encoding="utf-8"))
+                        mode = str(data.get("resolution_mode", "")).strip()
+                        if mode in {"project-first", "env-first"}:
+                            self.resolution_mode = mode
+                            break
+                except Exception:
+                    pass
+        if os.environ.get("CHI_LLM_ALLOW_GLOBAL") is None and not self.allow_global:
+            local = self.config_paths.get("local")
+            project = self.config_paths.get("project")
+            for p in [local, project]:
+                try:
+                    if p and p.exists():
+                        data = json.loads(p.read_text(encoding="utf-8"))
+                        ag = data.get("allow_global")
+                        if isinstance(ag, bool):
+                            self.allow_global = ag
+                            break
+                except Exception:
+                    pass
+
+    def _merge_loaded_config(self, loaded: Dict) -> None:
+        # Recognize default_model as explicit when provided
+        if isinstance(loaded, dict) and loaded.get("default_model"):
+            self._explicit_default = True
+        self.config.update(loaded or {})
+
+    def has_explicit_default(self) -> bool:
+        return self._explicit_default
 
     def save_config(self, target: str = "global"):
         """Save model configuration.
@@ -466,11 +542,28 @@ class ModelManager:
 
     def get_model_stats(self) -> Dict:
         """Get statistics about models."""
+        # Best-effort source label (indicative only)
         config_source = "default"
-        for source in ["custom", "env", "local", "project", "global"]:
-            if source in self.config_paths and self.config_paths[source].exists():
-                config_source = source
-                break
+        env_cfg = os.environ.get("CHI_LLM_CONFIG")
+        if env_cfg:
+            config_source = "env"
+        elif (Path.cwd() / ".chi_llm.json").exists():
+            config_source = "local"
+        else:
+            # Walk up for project
+            current = Path.cwd()
+            while current != current.parent:
+                if (current / ".chi_llm.json").exists():
+                    config_source = "project"
+                    break
+                current = current.parent
+        if (
+            self.allow_global
+            and self.config_paths.get("global", Path("/dev/null")).exists()
+        ):
+            # If no other source found, label as global
+            if config_source == "default":
+                config_source = "global"
 
         return {
             "total_models": len(MODELS),
@@ -503,14 +596,4 @@ def format_model_info(
 """
 
 
-def get_model_by_size(size_category: str) -> Optional[ModelInfo]:
-    """Get recommended model by size category."""
-    size_map = {
-        "tiny": "gemma-270m",
-        "small": "qwen3-1.7b",
-        "medium": "gemma2-2b",
-        "large": "phi3-mini",
-    }
-
-    model_id = size_map.get(size_category.lower())
-    return MODELS.get(model_id) if model_id else None
+## Deprecated: get_model_by_size moved out in future versions
