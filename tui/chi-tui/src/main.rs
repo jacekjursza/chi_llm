@@ -90,6 +90,10 @@ struct App {
     selected_model_id: Option<String>,
     // readme viewer
     readme: Option<ReadmeState>,
+    // select default provider
+    defaultp: Option<DefaultProviderState>,
+    // providers catalog
+    providers: Option<ProvidersState>,
 }
 
 impl App {
@@ -109,6 +113,8 @@ impl App {
             model: None,
             selected_model_id: None,
             readme: None,
+            defaultp: None,
+            providers: None,
         }
     }
 }
@@ -281,6 +287,64 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
     }
+
+    // Select Default provider keys
+    if app.page == Page::SelectDefault {
+        if app.defaultp.is_none() {
+            match load_providers_scratch() {
+                Ok(s) => app.defaultp = Some(s),
+                Err(e) => app.last_error = Some(format!("Load providers failed: {e}")),
+            }
+        }
+        if let Some(s) = &mut app.defaultp {
+            match key.code {
+                KeyCode::Up => { if !s.providers.is_empty() && s.selected > 0 { s.selected -= 1; } },
+                KeyCode::Down => { if !s.providers.is_empty() && s.selected + 1 < s.providers.len() { s.selected += 1; } },
+                KeyCode::Enter | KeyCode::Char('s') | KeyCode::Char('S') => {
+                    if let Some(p) = s.providers.get(s.selected) {
+                        s.current_default_id = Some(p.id.clone());
+                        if let Err(e) = save_default_provider(&p.id) {
+                            app.last_error = Some(format!("Save default failed: {e}"));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Configure Providers keys
+    if app.page == Page::Configure {
+        if app.providers.is_none() {
+            app.providers = Some(match load_providers_state() {
+                Ok(s) => s,
+                Err(e) => { app.last_error = Some(format!("Load providers failed: {e}")); ProvidersState::empty() }
+            });
+        }
+        if let Some(st) = &mut app.providers {
+            match key.code {
+                KeyCode::Up => { if st.selected > 0 { st.selected -= 1; } },
+                KeyCode::Down => { if st.selected + 1 < st.len_with_add() { st.selected += 1; } },
+                KeyCode::Enter => {
+                    if st.is_add_row() { st.add_default(); }
+                }
+                KeyCode::Char('a') | KeyCode::Char('A') => { st.add_default(); }
+                KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); }
+                KeyCode::Char('s') | KeyCode::Char('S') => {
+                    if let Err(e) = st.save() { app.last_error = Some(format!("Save failed: {e}")); }
+                }
+                KeyCode::Char('m') | KeyCode::Char('M') => {
+                    // open model browser; on return, apply to selected provider
+                    app.page = Page::ModelBrowser;
+                }
+                _ => {}
+            }
+            // If a model was picked in model browser, apply to selected provider
+            if let Some(model_id) = app.selected_model_id.take() {
+                st.apply_model_to_selected(&model_id);
+            }
+        }
+    }
 }
 
 const WELCOME_ITEMS: &[(&str, Page)] = &[
@@ -307,8 +371,8 @@ fn ui(f: &mut Frame, app: &App) {
     match app.page {
         Page::Welcome => draw_welcome(f, chunks[1], app),
         Page::Readme => draw_readme(f, chunks[1], app),
-        Page::Configure => draw_stub(f, chunks[1], app, &format!("Configure Providers (stub) — A/S/D/T/m to be implemented{}", match &app.selected_model_id { Some(id) => format!(" • selected model: {}", id), None => String::new() })),
-        Page::SelectDefault => draw_stub(f, chunks[1], app, "Select Default (stub) — Enter to set"),
+        Page::Configure => draw_providers_catalog(f, chunks[1], app),
+        Page::SelectDefault => draw_select_default(f, chunks[1], app),
         Page::ModelBrowser => draw_model_browser(f, chunks[1], app),
         Page::Diagnostics => draw_diagnostics(f, chunks[1], app),
         Page::Build => draw_stub(f, chunks[1], app, "Build Config (stub) — Project/Global"),
@@ -343,6 +407,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
         Page::Readme => "Up/Down scroll • PgUp/PgDn faster • h TOC • Esc back",
         Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
+        Page::SelectDefault => "Up/Down select • Enter set default • Esc back",
         _ => "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
     };
     let msg = Line::from(Span::styled(msg_text, Style::default().fg(app.theme.secondary)));
@@ -382,6 +447,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("?: help overlay • t: theme • a: animation"),
         Line::from("Diagnostics: e export • r refresh"),
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
+        Line::from("Configure: Up/Down • Enter/A add • D delete • S save • m set model"),
         Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC"),
         Line::from("Welcome: Up/Down + Enter to open a section"),
         Line::from("—").style(Style::default().fg(app.theme.frame)),
@@ -508,6 +574,67 @@ fn draw_diagnostics(f: &mut Frame, area: Rect, app: &App) {
 }
 
 #[derive(Clone, Debug)]
+struct ProviderEntry { id: String, name: String, ptype: String, tags: Vec<String> }
+
+#[derive(Clone, Debug)]
+struct DefaultProviderState {
+    providers: Vec<ProviderEntry>,
+    selected: usize,
+    current_default_id: Option<String>,
+}
+
+fn load_providers_scratch() -> Result<DefaultProviderState> {
+    let path = "chi.tmp.json";
+    let text = fs::read_to_string(path).unwrap_or_else(|_| "{}".to_string());
+    let v: Value = serde_json::from_str(&text)?;
+    let mut providers: Vec<ProviderEntry> = Vec::new();
+    if let Some(arr) = v.get("providers").and_then(|x| x.as_array()) {
+        for p in arr {
+            let id = p.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let name = p.get("name").and_then(|x| x.as_str()).unwrap_or(&id).to_string();
+            let ptype = p.get("type").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let tags: Vec<String> = p.get("tags").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|t| t.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
+            if !id.is_empty() { providers.push(ProviderEntry { id, name, ptype, tags }); }
+        }
+    }
+    let current_default_id = v.get("default_provider_id").and_then(|x| x.as_str()).map(|s| s.to_string());
+    Ok(DefaultProviderState { providers, selected: 0, current_default_id })
+}
+
+fn save_default_provider(id: &str) -> Result<()> {
+    let path = "chi.tmp.json";
+    let mut root: Value = if let Ok(text) = fs::read_to_string(path) { serde_json::from_str(&text).unwrap_or_else(|_| Value::Object(Default::default())) } else { Value::Object(Default::default()) };
+    if !root.is_object() { root = Value::Object(Default::default()); }
+    if let Some(obj) = root.as_object_mut() {
+        obj.insert("default_provider_id".to_string(), Value::String(id.to_string()));
+    }
+    fs::write(path, serde_json::to_vec_pretty(&root)?)?;
+    Ok(())
+}
+
+fn draw_select_default(f: &mut Frame, area: Rect, app: &App) {
+    let mut items: Vec<ListItem> = Vec::new();
+    if let Some(st) = &app.defaultp {
+        for (i, p) in st.providers.iter().enumerate() {
+            let mut label = format!("{} {} [{}]", if i == st.selected {"›"} else {" "}, p.name, p.ptype);
+            if let Some(cur) = &st.current_default_id { if cur == &p.id { label.push_str("  [default]"); } }
+            if !p.tags.is_empty() { label.push_str(&format!("  [{}]", p.tags.join(","))); }
+            let style = if i == st.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+            items.push(ListItem::new(Line::from(Span::styled(label, style))))
+        }
+        if st.providers.is_empty() {
+            items.push(ListItem::new("No providers found in chi.tmp.json → Configure first."));
+        }
+    } else {
+        items.push(ListItem::new("Loading providers..."));
+    }
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Select Default Provider"))
+        .highlight_style(Style::default().fg(app.theme.selected));
+    f.render_widget(list, area);
+}
+
+#[derive(Clone, Debug)]
 struct TocEntry { level: u8, title: String, line: usize }
 
 #[derive(Clone, Debug)]
@@ -587,6 +714,109 @@ fn draw_readme(f: &mut Frame, area: Rect, app: &App) {
     let mut new_rm = rm.clone();
     if let Some(orig) = &app.readme { new_rm.scroll = rm.scroll.max(orig.scroll); new_rm.show_toc = rm.show_toc; }
     // Update app state: this function has &App, so we can't mutate here. Caller updates via key handler.
+}
+
+#[derive(Clone, Debug)]
+struct ProviderScratchEntry { id: String, name: String, ptype: String, tags: Vec<String>, config: Value }
+
+#[derive(Clone, Debug)]
+struct ProvidersState {
+    entries: Vec<ProviderScratchEntry>,
+    selected: usize,
+    schema_types: Vec<String>,
+}
+
+impl ProvidersState {
+    fn empty() -> Self { Self { entries: Vec::new(), selected: 0, schema_types: Vec::new() } }
+    fn len_with_add(&self) -> usize { self.entries.len() + 1 }
+    fn is_add_row(&self) -> bool { self.selected >= self.entries.len() }
+    fn add_default(&mut self) {
+        let ptype = self.schema_types.get(0).cloned().unwrap_or_else(|| "local".to_string());
+        let id = format!("p{}", self.entries.len() + 1);
+        let name = format!("{}", &ptype);
+        let mut cfg = serde_json::json!({"type": ptype});
+        self.entries.push(ProviderScratchEntry { id, name, ptype: cfg.get("type").and_then(|x| x.as_str()).unwrap_or("").to_string(), tags: Vec::new(), config: cfg });
+        self.selected = self.entries.len().saturating_sub(1);
+    }
+    fn delete_selected(&mut self) {
+        if self.selected < self.entries.len() { self.entries.remove(self.selected); if self.selected > 0 { self.selected -= 1; } }
+    }
+    fn apply_model_to_selected(&mut self, model_id: &str) {
+        if self.selected < self.entries.len() {
+            if let Some(obj) = self.entries[self.selected].config.as_object_mut() {
+                obj.insert("model".to_string(), Value::String(model_id.to_string()));
+            }
+        }
+    }
+    fn save(&self) -> Result<()> {
+        // Preserve default_provider_id if present
+        let path = "chi.tmp.json";
+        let mut root: Value = if let Ok(text) = fs::read_to_string(path) { serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({})) } else { serde_json::json!({}) };
+        let mut providers: Vec<Value> = Vec::new();
+        for e in &self.entries {
+            providers.push(serde_json::json!({
+                "id": e.id,
+                "name": e.name,
+                "type": e.ptype,
+                "tags": e.tags,
+                "config": e.config,
+            }));
+        }
+        if !root.is_object() { root = serde_json::json!({}); }
+        if let Some(obj) = root.as_object_mut() {
+            obj.insert("providers".to_string(), Value::Array(providers));
+        }
+        fs::write(path, serde_json::to_vec_pretty(&root)?)?;
+        Ok(())
+    }
+}
+
+fn load_providers_state() -> Result<ProvidersState> {
+    // Load schema types
+    let schema = run_cli_json(&["providers", "schema", "--json"], Duration::from_secs(5))?;
+    let mut types: Vec<String> = Vec::new();
+    if let Some(obj) = schema.as_object() {
+        for k in obj.keys() { types.push(k.to_string()); }
+        types.sort();
+    }
+    // Load scratch file
+    let path = "chi.tmp.json";
+    let text = fs::read_to_string(path).unwrap_or_else(|_| "{}".to_string());
+    let v: Value = serde_json::from_str(&text)?;
+    let mut entries: Vec<ProviderScratchEntry> = Vec::new();
+    if let Some(arr) = v.get("providers").and_then(|x| x.as_array()) {
+        for p in arr {
+            let id = p.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let name = p.get("name").and_then(|x| x.as_str()).unwrap_or(&id).to_string();
+            let ptype = p.get("type").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let tags: Vec<String> = p.get("tags").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|t| t.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
+            let config = p.get("config").cloned().unwrap_or_else(|| serde_json::json!({"type": ptype}));
+            entries.push(ProviderScratchEntry { id, name, ptype, tags, config });
+        }
+    }
+    Ok(ProvidersState { entries, selected: 0, schema_types: types })
+}
+
+fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
+    let mut items: Vec<ListItem> = Vec::new();
+    if let Some(st) = &app.providers {
+        for (i, e) in st.entries.iter().enumerate() {
+            let mut label = format!("{} {} [{}]", if i == st.selected {"›"} else {" "}, e.name, e.ptype);
+            if let Some(model) = e.config.get("model").and_then(|v| v.as_str()) { label.push_str(&format!("  [model:{}]", model)); }
+            if !e.tags.is_empty() { label.push_str(&format!("  [{}]", e.tags.join(","))); }
+            let style = if i == st.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+            items.push(ListItem::new(Line::from(Span::styled(label, style))));
+        }
+        // Add provider row
+        let add_style = if st.is_add_row() { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.accent) };
+        items.push(ListItem::new(Line::from(Span::styled("+ Add provider", add_style))));
+    } else {
+        items.push(ListItem::new("Loading providers..."));
+    }
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Configure Providers"))
+        .highlight_style(Style::default().fg(app.theme.selected));
+    f.render_widget(list, area);
 }
 
 #[derive(Clone, Debug)]
