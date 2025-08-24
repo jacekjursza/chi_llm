@@ -6,6 +6,9 @@ Meta
 - Status: Planned / In Progress
 - See also: 000_general_app_description.md (Brief/Contract)
 
+Decision
+- Implementation language/framework: Rust + ratatui (Aug 24, 2025)
+
 - Context: Specyfikacja ekranów, klawiszologii, przejść i opcji dla nowej wersji TUI jako wrapper nad chi‑llm (Python jako source‑of‑truth). Wymaga `chi-llm` na PATH. Wersja Go jest wycofywana.
 - Scope: EPIC rozbity na mniejsze, wykonawcze zadania (poniżej). Każde zadanie ma własny plik TODO z zakresem i kryteriami akceptacji.
 - Non‑goals: Wybór języka i frameworka UI; implementacja logiki chi‑llm.
