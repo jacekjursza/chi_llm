@@ -272,20 +272,27 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                     KeyCode::Backspace => { if form.editing { if let Some(ch) = form.fields.get_mut(form.selected) { ch.buffer.pop(); } } }
                     KeyCode::Tab => { if form.selected + 1 < form.fields.len() { form.selected += 1; } else { form.selected = 0; } }
                     KeyCode::Char('s') | KeyCode::Char('S') => {
-                        // Save back to selected provider config
-                        if st.selected < st.entries.len() {
-                            if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
-                                for ff in &form.fields {
-                                    let key = ff.schema.name.clone();
-                                    if ff.schema.ftype == "int" {
-                                        if let Ok(n) = ff.buffer.parse::<i64>() { obj.insert(key, Value::Number(n.into())); } else { obj.insert(key, Value::String(ff.buffer.clone())); }
-                                    } else {
-                                        obj.insert(key, Value::String(ff.buffer.clone()));
+                        // Validate required fields
+                        let mut missing: Vec<String> = Vec::new();
+                        for ff in &form.fields { if ff.schema.required && ff.buffer.trim().is_empty() { missing.push(ff.schema.name.clone()); } }
+                        if !missing.is_empty() {
+                            form.message = Some(format!("Missing required: {}", missing.join(", ")));
+                        } else {
+                            // Save back to selected provider config
+                            if st.selected < st.entries.len() {
+                                if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
+                                    for ff in &form.fields {
+                                        let key = ff.schema.name.clone();
+                                        if ff.schema.ftype == "int" {
+                                            if let Ok(n) = ff.buffer.parse::<i64>() { obj.insert(key, Value::Number(n.into())); } else { obj.insert(key, Value::String(ff.buffer.clone())); }
+                                        } else {
+                                            obj.insert(key, Value::String(ff.buffer.clone()));
+                                        }
                                     }
                                 }
                             }
+                            st.form = None;
                         }
-                        st.form = None;
                     }
                     KeyCode::Char(c) => { if form.editing { if let Some(ch) = form.fields.get_mut(form.selected) { ch.buffer.push(c); } } }
                     _ => { }
@@ -361,7 +368,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 if value.is_empty() { if let Some(d) = &sc.default { value = d.clone(); } }
                                 ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone() }, buffer: value });
                             }
-                            st.form = Some(FormState { fields: ff, selected: 0, editing: false });
+                            st.form = Some(FormState { fields: ff, selected: 0, editing: false, message: None });
                         }
                     }
                 }

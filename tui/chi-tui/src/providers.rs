@@ -413,10 +413,17 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
             )));
             for (i, ff) in form.fields.iter().enumerate() {
                 let req = if ff.schema.required { "*" } else { " " };
-                let label = format!("{} {}: {}", req, ff.schema.name, ff.buffer);
-                let style = if i == form.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                let display_val = if ff.schema.ftype == "secret" && !ff.buffer.is_empty() {
+                    "••••••".to_string()
+                } else { ff.buffer.clone() };
+                let mut label = format!("{} {}: {}", req, ff.schema.name, display_val);
+                if let Some(help) = &ff.schema.help { if !help.is_empty() { label.push_str(&format!("  — {}", help)); } }
+                let mut style = if i == form.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                // Highlight missing required fields in red
+                if ff.schema.required && ff.buffer.trim().is_empty() { style = Style::default().fg(ratatui::style::Color::Red); }
                 lines.push(Line::from(Span::styled(label, style)));
             }
+            if let Some(msg) = &form.message { lines.push(Line::from(Span::styled(msg.clone(), Style::default().fg(ratatui::style::Color::Red)))); }
             let p = Paragraph::new(lines)
                 .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
                 .block(
@@ -446,7 +453,12 @@ pub struct FieldSchema {
 pub struct FormField { pub schema: FieldSchema, pub buffer: String }
 
 #[derive(Clone, Debug)]
-pub struct FormState { pub fields: Vec<FormField>, pub selected: usize, pub editing: bool }
+pub struct FormState {
+    pub fields: Vec<FormField>,
+    pub selected: usize,
+    pub editing: bool,
+    pub message: Option<String>,
+}
 
 pub fn probe_provider(entry: &ProviderScratchEntry) -> Result<String> {
     let ptype = entry.ptype.as_str();
