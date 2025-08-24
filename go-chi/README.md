@@ -39,3 +39,9 @@ go test ./...
 - Dependencies: `bubbletea`, `bubbles` (key), `lipgloss`.
 - On (re)Build, Enter writes a minimal project config to `.chi_llm.json`.
   - If you picked a model in the browser, it's saved as `provider.model`.
+  
+### Models Source of Truth
+
+- The model browser now pulls the curated local model catalog from the Python CLI: `chi-llm models list --json`.
+- This keeps Go TUI in sync with the YAML-backed registry shipped by the `chi-llm` Python package.
+- If the CLI is not available in PATH, the TUI falls back to a small placeholder list.
