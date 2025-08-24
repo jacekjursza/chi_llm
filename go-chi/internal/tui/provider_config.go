@@ -86,17 +86,46 @@ func NeedsConfiguration(providerType string) bool {
 }
 
 // GetConfigurableFields returns which fields can be configured for a provider
+// schemaCache caches provider field schemas fetched from CLI.
+var schemaCache map[string][]string
+
+// GetConfigurableFields returns which fields can be configured for a provider.
+// The schema is fetched from the chi-llm CLI (`providers schema --json`).
 func GetConfigurableFields(providerType string) []string {
-	switch providerType {
-	case "lmstudio", "ollama":
-		return []string{"host", "port", "model", "tags"}
-	case "openai":
-		return []string{"api_key", "model", "base_url", "org_id", "tags"}
-	case "local":
-		return []string{"model", "tags"}
-	default:
-		return []string{"tags"}
-	}
+    if schemaCache == nil {
+        schemaCache = map[string][]string{}
+        type field struct{ Name string `json:"name"` }
+        var payload struct{
+            Providers []struct{
+                Type   string  `json:"type"`
+                Fields []field `json:"fields"`
+            } `json:"providers"`
+        }
+        cmd := exec.Command("chi-llm", "providers", "schema", "--json")
+        if out, err := cmd.Output(); err == nil {
+            if json.Unmarshal(out, &payload) == nil {
+                for _, p := range payload.Providers {
+                    names := make([]string, 0, len(p.Fields))
+                    for _, f := range p.Fields {
+                        if f.Name != "" {
+                            names = append(names, f.Name)
+                        }
+                    }
+                    schemaCache[p.Type] = names
+                }
+            }
+        }
+    }
+    if fields, ok := schemaCache[providerType]; ok && len(fields) > 0 {
+        // Always append tags as a UI-level concept
+        hasTags := false
+        for _, f := range fields { if f == "tags" { hasTags = true; break } }
+        if !hasTags { fields = append(fields, "tags") }
+        return fields
+    }
+    // Fallback minimal
+    if providerType == "local" { return []string{"model", "tags"} }
+    return []string{"tags"}
 }
 
 // GetAvailableTags fetches available tags from chi_llm CLI

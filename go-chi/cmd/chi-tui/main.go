@@ -16,7 +16,12 @@ func main() {
 	noAlt := flag.Bool("no-alt", false, "disable alt screen")
 	flag.Parse()
 
-	m := tui.NewModel(providers.List(), theme.Light, *once)
+	ptypes := providers.List()
+	if len(ptypes) == 0 {
+		fmt.Println("chi-llm CLI required: no providers available. Ensure 'chi-llm' is installed and on PATH.")
+		return
+	}
+	m := tui.NewModel(ptypes, theme.Light, *once)
 	opts := []tea.ProgramOption{tea.WithMouseCellMotion(), tea.WithMouseAllMotion()}
 	if !*noAlt {
 		opts = append(opts, tea.WithAltScreen())
