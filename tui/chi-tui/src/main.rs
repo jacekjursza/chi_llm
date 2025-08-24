@@ -18,6 +18,8 @@ use ratatui::prelude::Frame;
 use serde_json::Value;
 use wait_timeout::ChildExt;
 use std::fs;
+use reqwest::blocking::Client;
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 
 #[derive(Parser, Debug)]
 #[command(name = "chi-tui")] 
@@ -322,6 +324,30 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             });
         }
         if let Some(st) = &mut app.providers {
+            // Editing mode
+            if let Some(edit) = &mut st.edit {
+                match key.code {
+                    KeyCode::Esc => { st.edit = None; }
+                    KeyCode::Enter => {
+                        if st.selected < st.entries.len() {
+                            let entry = &mut st.entries[st.selected];
+                            let val = match edit.field.as_str() {
+                                "port" => edit.buffer.parse::<u16>().map(|n| Value::Number(n.into())).unwrap_or(Value::String(edit.buffer.clone())),
+                                _ => Value::String(edit.buffer.clone()),
+                            };
+                            if let Some(obj) = entry.config.as_object_mut() {
+                                obj.insert(edit.field.clone(), val);
+                            }
+                        }
+                        st.edit = None;
+                    }
+                    KeyCode::Backspace => { edit.buffer.pop(); }
+                    KeyCode::Char(c) => { edit.buffer.push(c); }
+                    _ => {}
+                }
+                return;
+            }
+
             match key.code {
                 KeyCode::Up => { if st.selected > 0 { st.selected -= 1; } },
                 KeyCode::Down => { if st.selected + 1 < st.len_with_add() { st.selected += 1; } },
@@ -334,8 +360,45 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                     if let Err(e) = st.save() { app.last_error = Some(format!("Save failed: {e}")); }
                 }
                 KeyCode::Char('m') | KeyCode::Char('M') => {
-                    // open model browser; on return, apply to selected provider
                     app.page = Page::ModelBrowser;
+                }
+                KeyCode::Char('e') | KeyCode::Char('E') => {
+                    if st.selected < st.entries.len() {
+                        let cur = st.entries[st.selected].config.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        st.edit = Some(EditState{ field: "model".to_string(), buffer: cur });
+                    }
+                }
+                KeyCode::Char('h') | KeyCode::Char('H') => {
+                    if st.selected < st.entries.len() {
+                        let cur = st.entries[st.selected].config.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        st.edit = Some(EditState{ field: "host".to_string(), buffer: cur });
+                    }
+                }
+                KeyCode::Char('p') | KeyCode::Char('P') => {
+                    if st.selected < st.entries.len() {
+                        let cur = st.entries[st.selected].config.get("port").map(|v| v.to_string()).unwrap_or_default();
+                        st.edit = Some(EditState{ field: "port".to_string(), buffer: cur });
+                    }
+                }
+                KeyCode::Char('k') | KeyCode::Char('K') => {
+                    if st.selected < st.entries.len() {
+                        let cur = st.entries[st.selected].config.get("api_key").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        st.edit = Some(EditState{ field: "api_key".to_string(), buffer: cur });
+                    }
+                }
+                KeyCode::Char('b') | KeyCode::Char('B') => {
+                    if st.selected < st.entries.len() {
+                        let cur = st.entries[st.selected].config.get("base_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        st.edit = Some(EditState{ field: "base_url".to_string(), buffer: cur });
+                    }
+                }
+                KeyCode::Char('t') | KeyCode::Char('T') => {
+                    if st.selected < st.entries.len() {
+                        match probe_provider(&st.entries[st.selected]) {
+                            Ok(msg) => st.test_status = Some(msg),
+                            Err(e) => st.test_status = Some(format!("Error: {}", e)),
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -447,7 +510,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("?: help overlay • t: theme • a: animation"),
         Line::from("Diagnostics: e export • r refresh"),
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
-        Line::from("Configure: Up/Down • Enter/A add • D delete • S save • m set model"),
+        Line::from("Configure: Up/Down • Enter/A add • D delete • S save • m model • E model • H host • P port • K key • B base_url • T test"),
         Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC"),
         Line::from("Welcome: Up/Down + Enter to open a section"),
         Line::from("—").style(Style::default().fg(app.theme.frame)),
@@ -724,10 +787,12 @@ struct ProvidersState {
     entries: Vec<ProviderScratchEntry>,
     selected: usize,
     schema_types: Vec<String>,
+    edit: Option<EditState>,
+    test_status: Option<String>,
 }
 
 impl ProvidersState {
-    fn empty() -> Self { Self { entries: Vec::new(), selected: 0, schema_types: Vec::new() } }
+    fn empty() -> Self { Self { entries: Vec::new(), selected: 0, schema_types: Vec::new(), edit: None, test_status: None } }
     fn len_with_add(&self) -> usize { self.entries.len() + 1 }
     fn is_add_row(&self) -> bool { self.selected >= self.entries.len() }
     fn add_default(&mut self) {
@@ -794,7 +859,7 @@ fn load_providers_state() -> Result<ProvidersState> {
             entries.push(ProviderScratchEntry { id, name, ptype, tags, config });
         }
     }
-    Ok(ProvidersState { entries, selected: 0, schema_types: types })
+    Ok(ProvidersState { entries, selected: 0, schema_types: types, edit: None, test_status: None })
 }
 
 fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
@@ -810,6 +875,7 @@ fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
         // Add provider row
         let add_style = if st.is_add_row() { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.accent) };
         items.push(ListItem::new(Line::from(Span::styled("+ Add provider", add_style))));
+        if let Some(status) = &st.test_status { items.push(ListItem::new(Line::from(Span::styled(format!("Status: {}", status), Style::default().fg(app.theme.secondary))))); }
     } else {
         items.push(ListItem::new("Loading providers..."));
     }
@@ -817,7 +883,74 @@ fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
         .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Configure Providers"))
         .highlight_style(Style::default().fg(app.theme.selected));
     f.render_widget(list, area);
+
+    // Input overlay for editing provider field
+    if let Some(st) = &app.providers { if let Some(edit) = &st.edit {
+        let area_pop = centered_rect(60, 30, area);
+        let prompt = format!("Edit {}: {}", edit.field, edit.buffer);
+        let p = Paragraph::new(prompt)
+            .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Edit Field (Enter=save, Esc=cancel)"))
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true });
+        f.render_widget(Clear, area_pop);
+        f.render_widget(p, area_pop);
+    }}
 }
+
+fn probe_provider(entry: &ProviderScratchEntry) -> Result<String> {
+    let ptype = entry.ptype.as_str();
+    if ptype == "local" { return Ok("local: no network test".to_string()); }
+    let client = Client::builder().timeout(Duration::from_secs(3)).build()?;
+    match ptype {
+        "lmstudio" => {
+            let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
+            let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(1234);
+            let url = format!("http://{}:{}/v1/models", host, port);
+            let resp = client.get(&url).send()?;
+            let status = resp.status();
+            if status.is_success() {
+                let v: Value = resp.json()?;
+                let count = v.get("data").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+                Ok(format!("lmstudio: {} models", count))
+            } else { Ok(format!("lmstudio: HTTP {}", status)) }
+        }
+        "ollama" => {
+            let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
+            let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(11434);
+            let url = format!("http://{}:{}/api/tags", host, port);
+            let resp = client.get(&url).send()?;
+            let status = resp.status();
+            if status.is_success() {
+                let v: Value = resp.json()?;
+                let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+                Ok(format!("ollama: {} tags", count))
+            } else { Ok(format!("ollama: HTTP {}", status)) }
+        }
+        "openai" => {
+            let base = entry.config.get("base_url").and_then(|v| v.as_str()).unwrap_or("https://api.openai.com");
+            let url = format!("{}/v1/models", base.trim_end_matches('/'));
+            let key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+            let org = entry.config.get("org_id").and_then(|v| v.as_str());
+            if key.is_empty() { return Ok("openai: missing api_key".to_string()); }
+            let mut headers = HeaderMap::new();
+            let authv = format!("Bearer {}", key);
+            headers.insert(AUTHORIZATION, HeaderValue::from_str(&authv).unwrap_or(HeaderValue::from_static("")));
+            if let Some(o) = org { headers.insert("OpenAI-Organization", HeaderValue::from_str(o).unwrap_or(HeaderValue::from_static(""))); }
+            let resp = client.get(&url).headers(headers).send()?;
+            let status = resp.status();
+            if status.is_success() {
+                let v: Value = resp.json()?;
+                let count = v.get("data").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+                Ok(format!("openai: {} models", count))
+            } else { Ok(format!("openai: HTTP {}", status)) }
+        }
+        _ => Ok(format!("{}: no test implemented", ptype)),
+    }
+}
+
+#[derive(Clone, Debug)]
+struct EditState { field: String, buffer: String }
 
 #[derive(Clone, Debug)]
 struct ModelEntry {
