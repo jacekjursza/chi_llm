@@ -16,11 +16,7 @@ This document defines how agents work in this repository. General context: kmkkm
 - Code, comments, and documentation are in English.
 - Conversations with the user can be in Polish or English, depending on context.
 
-## Temporary Testing Policy (Important)
-- Do not run tests by default. Run the test suite only when the user explicitly asks.
-- Reason: there is a known timeout issue likely caused by something interactive blocking test execution.
-- Scope: applies to all workflows, including Quick Start/"ZACZYNAMY" and the standard Execution Protocol checks.
-- This is temporary and should be reverted once the timeout issue is resolved.
+<!-- Temporary Testing Policy removed: tests are back to normal execution -->
 
 ## Product Source of Truth
 - Main idea/brief: `README.md` (authoritative product overview and usage).
@@ -45,7 +41,7 @@ This document defines how agents work in this repository. General context: kmkkm
 ## Execution Protocol
 - Start by creating/updating a TODO card with scope and acceptance criteria.
 - When starting, move the card to In Progress and keep it updated.
-- Before moving to Done: format/lint as configured, update relevant docs, and prepare a commit. Tests: run only if the user explicitly requests (temporary timeout issue).
+- Before moving to Done: run full test suite, format/lint as configured, update relevant docs, and prepare a commit.
 - On completion, move the card to Done and add a concise changelog entry.
 - Commit changes locally per atomic task (one feature/improvement per commit) with a clear message referencing the Kanban card.
 - Early development: push to `master` by default after successful validation. If policy changes later, switch to PR-based flow.
@@ -72,8 +68,7 @@ Examples:
 - Maintain professional code quality; apply Single Responsibility Principle and YAGNI.
 - Write unit tests for every feature.
 - Maximum file size: 600 lines.
-- Temporary: do not run tests unless the user explicitly asks. This includes skipping tests in Quick Start/"ZACZYNAMY" flows.
-- When explicitly requested, run tests with `python -m pytest tests -v` (see `TESTING.md` for details).
+- Run tests with `python -m pytest tests -v` (see `TESTING.md` for details).
 - If existing files exceed limits or violate rules, raise it and propose refactor.
 - Prefer modular, extensible architecture with clear interfaces (e.g., provider adapters) to enable adding new backends (OpenAI, Groq, etc.) without breaking changes.
 - Keep it simple: avoid heavy plugin frameworks; prefer small, focused modules and minimal, well-defined interfaces. Implement only necessary abstractions (YAGNI).
