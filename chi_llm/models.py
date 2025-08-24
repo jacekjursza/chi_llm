@@ -291,7 +291,7 @@ class ModelManager:
         self.load_config()
 
     def _get_config_paths(self, custom_path: Optional[str] = None) -> Dict[str, Path]:
-        """Get all possible config paths in priority order."""
+        """Get possible config paths."""
         paths = {}
 
         # 1. Custom path if provided
@@ -322,13 +322,7 @@ class ModelManager:
         return paths
 
     def load_config(self):
-        """Load config with precedence and flags.
-
-        Default (project-first): local -> project -> env-file -> custom -> [global*]
-        Env-first: env-file -> local -> project -> custom -> [global*]
-        * Global applies only when CHI_LLM_ALLOW_GLOBAL is set truthy or enabled
-          in project config. CHI_LLM_MODEL always overrides explicitly.
-        """
+        """Load config with precedence and flags."""
         # Base defaults
         self.config = {
             # default_model intentionally assigned later; track explicitness
@@ -542,28 +536,32 @@ class ModelManager:
 
     def get_model_stats(self) -> Dict:
         """Get statistics about models."""
-        # Best-effort source label (indicative only)
+        # Best-effort source label and paths
         config_source = "default"
         env_cfg = os.environ.get("CHI_LLM_CONFIG")
+        local_path = (
+            (Path.cwd() / ".chi_llm.json")
+            if (Path.cwd() / ".chi_llm.json").exists()
+            else None
+        )
+        # Walk up for project path (excluding CWD already checked)
+        project_path = None
+        current = Path.cwd().parent
+        while current != current.parent:
+            candidate = current / ".chi_llm.json"
+            if candidate.exists():
+                project_path = candidate
+                break
+            current = current.parent
+        global_path = self.config_paths.get("global") if self.allow_global else None
         if env_cfg:
             config_source = "env"
-        elif (Path.cwd() / ".chi_llm.json").exists():
+        elif local_path is not None:
             config_source = "local"
-        else:
-            # Walk up for project
-            current = Path.cwd()
-            while current != current.parent:
-                if (current / ".chi_llm.json").exists():
-                    config_source = "project"
-                    break
-                current = current.parent
-        if (
-            self.allow_global
-            and self.config_paths.get("global", Path("/dev/null")).exists()
-        ):
-            # If no other source found, label as global
-            if config_source == "default":
-                config_source = "global"
+        elif project_path is not None:
+            config_source = "project"
+        elif global_path is not None and global_path.exists():
+            config_source = "global"
 
         return {
             "total_models": len(MODELS),
@@ -573,27 +571,16 @@ class ModelManager:
             "recommended_model": self.recommend_model().id,
             "config_source": config_source,
             "config_path": str(self.config_paths.get(config_source, "built-in")),
+            "resolution_mode": self.resolution_mode,
+            "allow_global": self.allow_global,
+            "explicit_default": self.has_explicit_default(),
+            "sources": {
+                "env_cfg": bool(env_cfg),
+                "env_model": bool(os.environ.get("CHI_LLM_MODEL")),
+                "local": str(local_path) if local_path else None,
+                "project": str(project_path) if project_path else None,
+                "global": str(global_path)
+                if (global_path and global_path.exists())
+                else None,
+            },
         }
-
-
-def format_model_info(
-    model: ModelInfo, is_downloaded: bool = False, is_current: bool = False
-) -> str:
-    """Format model information for display."""
-    status = ""
-    if is_current:
-        status = " [CURRENT]"
-    elif is_downloaded:
-        status = " [Downloaded]"
-
-    return f"""
-{model.name} ({model.size}){status}
-  ID: {model.id}
-  Size: {model.file_size_mb}MB | RAM: {model.recommended_ram_gb}GB
-  Context: {model.context_window:,} tokens
-  Description: {model.description}
-  Tags: {', '.join(model.tags)}
-"""
-
-
-## Deprecated: get_model_by_size moved out in future versions

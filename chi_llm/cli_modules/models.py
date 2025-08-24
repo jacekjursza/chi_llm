@@ -5,7 +5,8 @@ Model management and setup commands.
 from argparse import _SubParsersAction
 
 try:
-    from ..models import ModelManager, MODELS, format_model_info
+    from ..models import ModelManager, MODELS
+    from ..model_utils import format_model_info
     from ..setup import SetupWizard
 
     HAS_MODELS = True
@@ -113,22 +114,75 @@ def cmd_models(args):
     elif args.models_command == "current":
         current = manager.get_current_model()
         stats = manager.get_model_stats()
+        explain = getattr(args, "explain", False)
+        # Compute effective model decision for local provider fallback
+        effective_model = current.id
+        effective_note = "explicit default"
+        try:
+            from ..utils import load_config
+
+            cfg = load_config() or {}
+            prov = cfg.get("provider") or {}
+            ptype = prov.get("type")
+            prov_local_model = prov.get("model") if ptype == "local" else None
+            if not stats.get("explicit_default") and prov_local_model:
+                effective_model = prov_local_model
+                effective_note = "provider local fallback"
+            elif not stats.get("explicit_default"):
+                # Legacy built-in default
+                effective_model = manager.config.get("default_model", current.id)
+                effective_note = "legacy default"
+        except Exception:
+            pass
         if getattr(args, "json", False):
-            _print_json(
-                {
-                    "id": current.id,
-                    "name": current.name,
-                    "size": current.size,
-                    "context_window": current.context_window,
-                    "downloaded": manager.is_downloaded(current.id),
-                    "config_source": stats.get("config_source"),
-                    "config_path": stats.get("config_path"),
+            out = {
+                "id": current.id,
+                "name": current.name,
+                "size": current.size,
+                "context_window": current.context_window,
+                "downloaded": manager.is_downloaded(current.id),
+                "config_source": stats.get("config_source"),
+                "config_path": stats.get("config_path"),
+            }
+            if explain:
+                out["explain"] = {
+                    "resolution_mode": stats.get("resolution_mode"),
+                    "allow_global": stats.get("allow_global"),
+                    "explicit_default": stats.get("explicit_default"),
+                    "sources": stats.get("sources"),
+                    "default_model": current.id,
+                    "effective_model": effective_model,
+                    "decision": effective_note,
                 }
-            )
+            _print_json(out)
         else:
             print(format_model_info(current, True, True))
             print(f"\n📁 Config source: {stats['config_source']}")
             print(f"   Path: {stats['config_path']}")
+            if explain:
+                print("\n🔎 Explain:")
+                print(
+                    "  • Resolution: {}, allow_global={}".format(
+                        stats["resolution_mode"], stats["allow_global"]
+                    )
+                )
+                print(
+                    "  • Explicit default: {} (default_model={})".format(
+                        stats["explicit_default"], current.id
+                    )
+                )
+                srcs = stats.get("sources", {})
+                print(
+                    "  • Sources: env_cfg={} env_model={}".format(
+                        srcs.get("env_cfg"), srcs.get("env_model")
+                    )
+                )
+                print(
+                    "             local={} project={} global={}".format(
+                        srcs.get("local"), srcs.get("project"), srcs.get("global")
+                    )
+                )
+                print(f"  • Effective model: {effective_model} ({effective_note})")
     elif args.models_command == "set":
         if args.model_id not in MODELS:
             print(f"❌ Unknown model: {args.model_id}")
@@ -191,6 +245,11 @@ def register(subparsers: _SubParsersAction):
     cur_parser = models_sub.add_parser("current", help="Show current model")
     cur_parser.add_argument(
         "--json", action="store_true", help="Output machine-readable JSON"
+    )
+    cur_parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="Show how the current model was chosen (with sources)",
     )
     models_set = models_sub.add_parser("set", help="Set default model")
     models_set.add_argument("model_id", help="Model ID (e.g., phi3-mini, qwen3-1.7b)")

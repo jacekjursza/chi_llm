@@ -265,6 +265,23 @@ Fields include:
 - cache: cache path existence/writability
 - model: current model, available vs recommended RAM
 - network: basic reachability to Hugging Face
+ - config: resolution mode, allow_global flag, config source/path, default vs effective model (decision)
+
+Explain model selection:
+
+```bash
+# Human-readable explanation
+chi-llm models current --explain
+
+# JSON with explanation (for UIs)
+chi-llm models current --explain --json | jq
+```
+
+The explanation shows:
+- resolution mode (project-first/env-first) and whether global is allowed
+- presence of env/project/local/global sources
+- explicit default vs fallback
+- effective model (provider local fallback or legacy default when no explicit default)
 
 ### 🧠 `rag` - RAG (Retrieval Augmented Generation)
 
@@ -349,6 +366,13 @@ chi-llm config set preferred_max_tokens 2048 --scope global # user
 ```
 
 Note: The Python/Textual UI has been removed. The interactive UI is the Go TUI under `go-chi/`. If Go is not available, `chi-llm config` prints instructions to build/run the Go TUI.
+
+### Configuration UI (Go TUI)
+
+The Diagnostics view integrates `chi-llm diagnostics --json` and `chi-llm models current --explain --json` to present:
+- Environment status and basic connectivity
+- Configuration resolution (sources, mode, allow_global)
+- Default vs effective model and why it was chosen
 
 ## Advanced Usage
 

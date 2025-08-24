@@ -15,7 +15,6 @@ from pathlib import Path
 import json
 import os
 import platform
-import sys
 import time
 
 try:
@@ -44,7 +43,12 @@ def _check_cache() -> dict:
     p = MODELS_DIR
     exists = p.exists()
     writable = os.access(p if exists else p.parent, os.W_OK)
-    return {"path": str(p), "exists": exists, "writable": writable, "ok": exists and writable}
+    return {
+        "path": str(p),
+        "exists": exists,
+        "writable": writable,
+        "ok": exists and writable,
+    }
 
 
 def _check_model() -> dict:
@@ -88,13 +92,49 @@ def _check_network(timeout: float = 2.0) -> dict:
 
 
 def _gather() -> dict:
-    return {
+    data = {
         "python": _check_python(),
         "node": _check_node(),
         "cache": _check_cache(),
         "model": _check_model(),
         "network": _check_network(),
     }
+    # Include config resolution details when available
+    try:
+        mgr = ModelManager() if ModelManager else None
+        stats = mgr.get_model_stats() if mgr else {}
+        # Compute effective model similar to `models current --explain`
+        effective_model = stats.get("current_model")
+        effective_note = (
+            "explicit default" if stats.get("explicit_default") else "legacy default"
+        )
+        prov_local_model = None
+        try:
+            from ..utils import load_config
+
+            cfg = load_config() or {}
+            prov = cfg.get("provider") or {}
+            if prov.get("type") == "local":
+                prov_local_model = prov.get("model")
+        except Exception:
+            pass
+        if prov_local_model and not stats.get("explicit_default"):
+            effective_model = prov_local_model
+            effective_note = "provider local fallback"
+        data["config"] = {
+            "resolution_mode": stats.get("resolution_mode"),
+            "allow_global": stats.get("allow_global"),
+            "config_source": stats.get("config_source"),
+            "config_path": stats.get("config_path"),
+            "explicit_default": stats.get("explicit_default"),
+            "default_model": stats.get("current_model"),
+            "effective_model": effective_model,
+            "decision": effective_note,
+            "sources": stats.get("sources"),
+        }
+    except Exception:
+        pass
+    return data
 
 
 def cmd_diagnostics(args):
@@ -107,7 +147,11 @@ def cmd_diagnostics(args):
     print(f"Python: {data['python']['version']} ({data['python']['implementation']})")
     print(f"Node: {'ok' if data['node']['ok'] else 'missing'}")
     cache = data["cache"]
-    print(f"Cache: {cache['path']} | exists={cache['exists']} writable={cache['writable']}")
+    print(
+        "Cache: {} | exists={} writable={}".format(
+            cache["path"], cache["exists"], cache["writable"]
+        )
+    )
     model = data["model"]
     if model.get("ok"):
         print(
@@ -116,10 +160,23 @@ def cmd_diagnostics(args):
         )
     net = data["network"]
     print(f"Network (HF): {'ok' if net.get('ok') else 'fail'}")
+    cfg = data.get("config")
+    if cfg:
+        print("\nConfig:")
+        print(
+            f"  source={cfg.get('config_source')} path={cfg.get('config_path')} "
+            f"mode={cfg.get('resolution_mode')} allow_global={cfg.get('allow_global')}"
+        )
+        print(
+            "  default={} -> effective={} ({})".format(
+                cfg.get("default_model"),
+                cfg.get("effective_model"),
+                cfg.get("decision"),
+            )
+        )
 
 
 def register(subparsers: _SubParsersAction):
     sub = subparsers.add_parser("diagnostics", help="Show environment diagnostics")
     sub.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     sub.set_defaults(func=cmd_diagnostics)
-

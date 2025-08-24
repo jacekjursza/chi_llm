@@ -180,14 +180,14 @@ class MicroLLM:
 
                 manager = ModelManager()
                 resolved_id = manager.get_current_model().id
-                # If user did not pass model_id explicitly, use manager's choice
-                if self.model_id is None:
+                # Use manager's choice only when it comes from an explicit source
+                if self.model_id is None and manager.has_explicit_default():
                     self.model_id = resolved_id
-                # If manager's choice is only the built-in default and a local
-                # provider model is declared, prefer provider as a fallback.
+                # If no explicit default and a local provider model is declared,
+                # prefer provider as a fallback.
                 if (
                     provider_local_model
-                    and self.model_id == resolved_id
+                    and self.model_id is None
                     and not manager.has_explicit_default()
                 ):
                     self.model_id = provider_local_model
