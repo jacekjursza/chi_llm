@@ -11,10 +11,10 @@ import (
 
 // ConnectionStatus represents the result of a connection test
 type ConnectionStatus struct {
-	Success   bool
-	Message   string
-	Details   string
-	Latency   time.Duration
+	Success bool
+	Message string
+	Details string
+	Latency time.Duration
 }
 
 // TestConnection tests connectivity to a provider based on its configuration
@@ -49,14 +49,14 @@ func testLMStudio(config ProviderConfig) ConnectionStatus {
 	if port == "" {
 		port = "1234"
 	}
-	
+
 	url := fmt.Sprintf("http://%s:%s/v1/models", host, port)
 	start := time.Now()
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	latency := time.Since(start)
-	
+
 	if err != nil {
 		return ConnectionStatus{
 			Success: false,
@@ -66,7 +66,7 @@ func testLMStudio(config ProviderConfig) ConnectionStatus {
 		}
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		return ConnectionStatus{
 			Success: false,
@@ -75,7 +75,7 @@ func testLMStudio(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	// Try to parse JSON response to verify it's a valid LM Studio endpoint
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -86,7 +86,7 @@ func testLMStudio(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	return ConnectionStatus{
 		Success: true,
 		Message: "Connected successfully",
@@ -105,24 +105,24 @@ func testOllama(config ProviderConfig) ConnectionStatus {
 	if port == "" {
 		port = "11434"
 	}
-	
+
 	url := fmt.Sprintf("http://%s:%s/api/tags", host, port)
 	start := time.Now()
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	latency := time.Since(start)
-	
+
 	if err != nil {
 		return ConnectionStatus{
 			Success: false,
-			Message: "Connection failed", 
+			Message: "Connection failed",
 			Details: err.Error(),
 			Latency: latency,
 		}
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		return ConnectionStatus{
 			Success: false,
@@ -131,7 +131,7 @@ func testOllama(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	// Try to parse JSON response to verify it's a valid Ollama endpoint
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -142,7 +142,7 @@ func testOllama(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	return ConnectionStatus{
 		Success: true,
 		Message: "Connected successfully",
@@ -160,15 +160,15 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 			Details: "OpenAI provider requires an API key",
 		}
 	}
-	
+
 	baseURL := config.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
 	}
-	
+
 	url := baseURL + "/v1/models"
 	start := time.Now()
-	
+
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -178,15 +178,15 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 			Details: err.Error(),
 		}
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 	if config.OrgID != "" {
 		req.Header.Set("OpenAI-Organization", config.OrgID)
 	}
-	
+
 	resp, err := client.Do(req)
 	latency := time.Since(start)
-	
+
 	if err != nil {
 		return ConnectionStatus{
 			Success: false,
@@ -196,7 +196,7 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 		}
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == 401 {
 		return ConnectionStatus{
 			Success: false,
@@ -205,7 +205,7 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return ConnectionStatus{
@@ -215,7 +215,7 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	// Try to parse JSON response
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -226,7 +226,7 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	// Check if response has models field (expected OpenAI API structure)
 	if _, hasModels := result["data"]; !hasModels {
 		return ConnectionStatus{
@@ -236,7 +236,7 @@ func testOpenAI(config ProviderConfig) ConnectionStatus {
 			Latency: latency,
 		}
 	}
-	
+
 	endpoint := strings.TrimSuffix(baseURL, "/")
 	return ConnectionStatus{
 		Success: true,

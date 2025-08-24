@@ -1,6 +1,10 @@
 """
 Model registry and management for chi_llm.
-Provides multiple model options with different sizes and capabilities.
+
+Changes:
+- Curated models registry is now YAML-backed (package file: models.yaml).
+- Falls back to a minimal built-in set if YAML not available.
+- Zero-config default model can be controlled from YAML (key: zero_config_default).
 """
 
 from dataclasses import dataclass
@@ -9,6 +13,7 @@ from pathlib import Path
 import json
 import os
 import logging
+from importlib import resources
 
 logger = logging.getLogger(__name__)
 
@@ -30,35 +35,93 @@ class ModelInfo:
     description: str
     recommended_ram_gb: float
     tags: List[str]
+    # Optional tuning defaults
+    n_gpu_layers: int = 0
+    output_tokens: int = 4096
 
 
-# Model Registry - curated list of best small models
-MODELS = {
-    # Tiny models (~270M)
+def _load_yaml_registry() -> Tuple[Dict[str, ModelInfo], Optional[str]]:
+    """Load models registry from YAML if available.
+
+    Order of attempts:
+    1) CHI_LLM_MODELS_YAML env var path (if exists)
+    2) Package resource chi_llm/models.yaml
+
+    Returns:
+        (models_dict, zero_config_default_id)
+    """
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        return {}, None
+
+    def _parse(doc: dict) -> Tuple[Dict[str, ModelInfo], Optional[str]]:
+        models: Dict[str, ModelInfo] = {}
+        zero_default: Optional[str] = None
+        if not isinstance(doc, dict):
+            return models, None
+        zero_default = doc.get("zero_config_default")
+        for item in doc.get("models", []) or []:
+            try:
+                # Accept alias 'context_windows' if present
+                ctx = item.get("context_window")
+                if ctx is None:
+                    ctx = item.get("context_windows")
+                mi = ModelInfo(
+                    id=str(item["id"]),
+                    name=str(item.get("name", item["id"])),
+                    size=str(item.get("size", "")),
+                    file_size_mb=int(item.get("file_size_mb", 0)),
+                    repo=str(item.get("repo", "")),
+                    filename=str(item.get("filename", "")),
+                    context_window=int(ctx if ctx is not None else 32768),
+                    description=str(item.get("description", "")),
+                    recommended_ram_gb=float(item.get("recommended_ram_gb", 2.0)),
+                    tags=list(item.get("tags", []) or []),
+                    n_gpu_layers=int(item.get("n_gpu_layers", 0) or 0),
+                    output_tokens=int(item.get("output_tokens", 4096) or 4096),
+                )
+                models[mi.id] = mi
+            except Exception:
+                continue
+        return models, zero_default
+
+    # 1) Env path
+    env_path = os.environ.get("CHI_LLM_MODELS_YAML")
+    if env_path and Path(env_path).exists():
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                doc = yaml.safe_load(f) or {}
+            return _parse(doc)
+        except Exception:
+            pass
+
+    # 2) Package resource
+    try:
+        with resources.files(__package__).joinpath("models.yaml").open(
+            "r", encoding="utf-8"
+        ) as f:
+            doc = yaml.safe_load(f) or {}
+        return _parse(doc)
+    except Exception:
+        return {}, None
+
+
+# Minimal built-in fallback when YAML not available (keep small)
+MODELS: Dict[str, ModelInfo] = {
     "gemma-270m": ModelInfo(
         id="gemma-270m",
         name="Gemma 3 270M",
         size="270M",
-        file_size_mb=385,  # Q8_0 is bigger than Q4_K_M
+        file_size_mb=385,
         repo="lmstudio-community/gemma-3-270m-it-GGUF",
-        filename="gemma-3-270m-it-Q8_0.gguf",  # Use Q8_0 for better quality
+        filename="gemma-3-270m-it-Q8_0.gguf",
         context_window=32768,
         description="Ultra-lightweight, fast inference, good for basic tasks",
         recommended_ram_gb=2.0,
         tags=["tiny", "fast", "cpu-friendly", "default"],
-    ),
-    # Small Qwen3 models
-    "qwen3-0.6b": ModelInfo(
-        id="qwen3-0.6b",
-        name="Qwen3 0.6B",
-        size="0.6B",
-        file_size_mb=500,
-        repo="Qwen/Qwen3-0.6B-GGUF",
-        filename="qwen3-0.6b-instruct-q5_k_m.gguf",
-        context_window=32768,
-        description="Tiny but capable, supports thinking/non-thinking modes",
-        recommended_ram_gb=1.5,
-        tags=["tiny", "versatile", "thinking-mode"],
+        n_gpu_layers=0,
+        output_tokens=4096,
     ),
     "qwen3-1.7b": ModelInfo(
         id="qwen3-1.7b",
@@ -71,56 +134,8 @@ MODELS = {
         description="Best performing model under 2B, thinking mode support",
         recommended_ram_gb=3.0,
         tags=["small", "balanced", "recommended", "thinking-mode"],
-    ),
-    "stablelm-2-1.6b": ModelInfo(
-        id="stablelm-2-1.6b",
-        name="StableLM 2 1.6B",
-        size="1.6B",
-        file_size_mb=1100,
-        repo="lmstudio-community/stablelm-2-1_6b-GGUF",
-        filename="stablelm-2-1_6b-Q4_K_M.gguf",
-        context_window=4096,
-        description="Stable Diffusion's language model, good general performance",
-        recommended_ram_gb=3.0,
-        tags=["small", "stable"],
-    ),
-    # 2B+ models
-    "gemma2-2b": ModelInfo(
-        id="gemma2-2b",
-        name="Gemma 2 2B",
-        size="2B",
-        file_size_mb=1420,
-        repo="bartowski/gemma-2-2b-it-GGUF",
-        filename="gemma-2-2b-it-Q4_K_M.gguf",
-        context_window=8192,
-        description="Google's efficient 2B model, great quality/size ratio",
-        recommended_ram_gb=4.0,
-        tags=["medium", "google", "efficient"],
-    ),
-    "phi2-2.7b": ModelInfo(
-        id="phi2-2.7b",
-        name="Phi-2",
-        size="2.7B",
-        file_size_mb=1680,
-        repo="lmstudio-community/Phi-2-GGUF",
-        filename="Phi-2-Q4_K_M.gguf",
-        context_window=2048,
-        description="Microsoft's small model, strong reasoning capabilities",
-        recommended_ram_gb=4.0,
-        tags=["medium", "microsoft", "reasoning"],
-    ),
-    # 3B+ models
-    "stablelm-3b": ModelInfo(
-        id="stablelm-3b",
-        name="StableLM 3B",
-        size="2.8B",
-        file_size_mb=1800,
-        repo="lmstudio-community/stablelm-3b-4e1t-GGUF",
-        filename="stablelm-3b-4e1t-Q4_K_M.gguf",
-        context_window=4096,
-        description="Best performing 3B model, trained on 4 trillion tokens",
-        recommended_ram_gb=4.0,
-        tags=["medium", "high-quality"],
+        n_gpu_layers=0,
+        output_tokens=4096,
     ),
     "phi3-mini": ModelInfo(
         id="phi3-mini",
@@ -133,132 +148,15 @@ MODELS = {
         description="Microsoft's champion model, performs like 7B but runs like 3B",
         recommended_ram_gb=5.0,
         tags=["large", "best-quality", "microsoft", "recommended"],
-    ),
-    # 4B models
-    "qwen3-8b": ModelInfo(
-        id="qwen3-8b",
-        name="Qwen3 8B",
-        size="8B",
-        file_size_mb=5500,
-        repo="Qwen/Qwen3-8B-GGUF",
-        filename="qwen3-8b-instruct-q5_k_m.gguf",
-        context_window=32768,
-        description="Latest Qwen3, excellent reasoning and multilingual support",
-        recommended_ram_gb=9.0,
-        tags=["large", "multilingual", "latest", "thinking-mode"],
-    ),
-    "gemma2-9b": ModelInfo(
-        id="gemma2-9b",
-        name="Gemma 2 9B (Q2_K)",
-        size="9B",
-        file_size_mb=3900,
-        repo="bartowski/gemma-2-9b-it-GGUF",
-        filename="gemma-2-9b-it-Q2_K.gguf",
-        context_window=8192,
-        description="Heavily quantized 9B model that runs like 4B",
-        recommended_ram_gb=6.0,
-        tags=["large", "compressed", "powerful"],
-    ),
-    # New blazingly fast models
-    "liquid-lfm2-1.2b": ModelInfo(
-        id="liquid-lfm2-1.2b",
-        name="Liquid LFM2 1.2B",
-        size="1.2B",
-        file_size_mb=1250,
-        repo="LiquidAI/LFM2-1.2B-GGUF",
-        filename="LFM2-1.2B-Q8_0.gguf",
-        context_window=32768,
-        description="Blazingly fast hybrid architecture, excels at math & multilingual",
-        recommended_ram_gb=2.5,
-        tags=["small", "fast", "multilingual", "math", "hybrid"],
-    ),
-    "deepseek-r1-qwen-1.5b": ModelInfo(
-        id="deepseek-r1-qwen-1.5b",
-        name="DeepSeek R1 Distill Qwen 1.5B",
-        size="1.5B",
-        file_size_mb=1600,
-        repo="bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF",
-        filename="DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf",
-        context_window=32768,
-        description="Distilled from DeepSeek R1, strong reasoning capabilities",
-        recommended_ram_gb=3.0,
-        tags=["small", "reasoning", "distilled"],
-    ),
-    # Qwen3 thinking models
-    "qwen3-4b-thinking": ModelInfo(
-        id="qwen3-4b-thinking",
-        name="Qwen3 4B Thinking 2507",
-        size="4B",
-        file_size_mb=2800,
-        repo="qwen/qwen3-4b-thinking-2507-gguf",
-        filename="qwen3-4b-thinking-2507-Q5_K_M.gguf",
-        context_window=262144,  # 256K context!
-        description="Advanced reasoning with thinking capability, 256K context",
-        recommended_ram_gb=5.0,
-        tags=["medium", "reasoning", "thinking", "long-context", "256k"],
-    ),
-    "qwen3-4b": ModelInfo(
-        id="qwen3-4b",
-        name="Qwen3 4B Instruct 2507",
-        size="4B",
-        file_size_mb=2800,
-        repo="qwen/qwen3-4b-2507-gguf",
-        filename="qwen3-4b-2507-Q5_K_M.gguf",
-        context_window=262144,  # 256K context!
-        description="Enhanced general capabilities, 256K context",
-        recommended_ram_gb=5.0,
-        tags=["medium", "general", "long-context", "256k"],
-    ),
-    # Qwen2.5-coder series
-    "qwen2.5-coder-0.5b": ModelInfo(
-        id="qwen2.5-coder-0.5b",
-        name="Qwen2.5 Coder 0.5B",
-        size="0.5B",
-        file_size_mb=500,
-        repo="Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
-        filename="qwen2.5-coder-0.5b-instruct-q5_k_m.gguf",
-        context_window=32768,
-        description="Tiny coding assistant, perfect for IDE integration",
-        recommended_ram_gb=1.5,
-        tags=["tiny", "coding", "fast", "ide"],
-    ),
-    "qwen2.5-coder-1.5b": ModelInfo(
-        id="qwen2.5-coder-1.5b",
-        name="Qwen2.5 Coder 1.5B",
-        size="1.5B",
-        file_size_mb=1100,
-        repo="Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
-        filename="qwen2.5-coder-1.5b-instruct-q5_k_m.gguf",
-        context_window=32768,
-        description="Small but capable coding model",
-        recommended_ram_gb=2.5,
-        tags=["small", "coding", "balanced"],
-    ),
-    "qwen2.5-coder-3b": ModelInfo(
-        id="qwen2.5-coder-3b",
-        name="Qwen2.5 Coder 3B",
-        size="3B",
-        file_size_mb=2100,
-        repo="Qwen/Qwen2.5-Coder-3B-Instruct-GGUF",
-        filename="qwen2.5-coder-3b-instruct-q5_k_m.gguf",
-        context_window=32768,
-        description="Powerful coding model with good performance",
-        recommended_ram_gb=4.0,
-        tags=["medium", "coding", "powerful"],
-    ),
-    "qwen2.5-coder-7b": ModelInfo(
-        id="qwen2.5-coder-7b",
-        name="Qwen2.5 Coder 7B",
-        size="7B",
-        file_size_mb=4900,
-        repo="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
-        filename="qwen2.5-coder-7b-instruct-q5_k_m.gguf",
-        context_window=32768,
-        description="Professional-grade coding model, excellent for complex tasks",
-        recommended_ram_gb=8.0,
-        tags=["large", "coding", "professional", "complex"],
+        n_gpu_layers=0,
+        output_tokens=4096,
     ),
 }
+
+# Attempt to override from YAML registry
+_YAML_MODELS, _YAML_ZERO_DEFAULT = _load_yaml_registry()
+if _YAML_MODELS:
+    MODELS = _YAML_MODELS
 
 
 class ModelManager:
@@ -380,9 +278,9 @@ class ModelManager:
             except ValueError:
                 pass
 
-        # Fill built-in default if still unset
+        # Fill built-in/YAML default if still unset
         if not self.config.get("default_model"):
-            self.config["default_model"] = "gemma-270m"
+            self.config["default_model"] = _YAML_ZERO_DEFAULT or "gemma-270m"
             # Only built-in, keep _explicit_default as-is (likely False)
 
     def _apply_peek_flags(self) -> None:
@@ -584,3 +482,23 @@ class ModelManager:
                 else None,
             },
         }
+
+    def resolve_effective_model(
+        self, provider_local_model: Optional[str] = None
+    ) -> Tuple[str, str]:
+        """Decide which model would be effectively used and why.
+
+        Returns a tuple of (model_id, decision_note):
+        - explicit default: default_model from env/project/local/global
+        - provider local fallback: no explicit default; provider.type=local
+          provides model
+        - legacy default: built-in default when nothing else provided
+        """
+        # Explicit default wins
+        if self.has_explicit_default():
+            return self.config.get("default_model", "gemma-270m"), "explicit default"
+        # Provider local fallback (if declared)
+        if isinstance(provider_local_model, str) and provider_local_model:
+            return provider_local_model, "provider local fallback"
+        # Legacy built-in default
+        return self.config.get("default_model", "gemma-270m"), "legacy default"

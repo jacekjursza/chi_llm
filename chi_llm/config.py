@@ -126,6 +126,10 @@ def get_provider_settings(config_path: Optional[str] = None) -> Dict[str, Any]:
     return {
         "type": ptype,
         "model": provider.get("model"),
+        "model_path": provider.get("model_path"),
+        "context_window": provider.get("context_window"),
+        "n_gpu_layers": provider.get("n_gpu_layers"),
+        "output_tokens": provider.get("output_tokens"),
         "host": str(provider.get("host", "127.0.0.1")),
         "port": provider.get("port"),
         "timeout": provider.get("timeout"),

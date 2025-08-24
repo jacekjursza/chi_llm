@@ -3,6 +3,8 @@ Model management and setup commands.
 """
 
 from argparse import _SubParsersAction
+from importlib import resources
+from typing import Any, Dict, List, Tuple
 
 try:
     from ..models import ModelManager, MODELS
@@ -46,6 +48,116 @@ def _print_json(obj):
     import json
 
     print(json.dumps(obj, indent=2))
+
+
+def _validate_models_yaml(path: str) -> Tuple[bool, Dict[str, Any]]:
+    """Validate a models YAML catalog file.
+
+    Returns (ok, report) where report contains errors, warnings, and stats.
+    """
+    report: Dict[str, Any] = {"errors": [], "warnings": [], "stats": {}}
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        report["errors"].append("PyYAML not installed; install pyyaml to validate.")
+        return False, report
+
+    # Load YAML
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        report["errors"].append(f"File not found: {path}")
+        return False, report
+    except Exception as e:  # pragma: no cover - depends on file
+        report["errors"].append(f"Failed to parse YAML: {e}")
+        return False, report
+
+    if not isinstance(doc, dict):
+        report["errors"].append("Root must be a mapping/dict.")
+        return False, report
+
+    # Version (optional)
+    ver = doc.get("version")
+    if ver is not None and not isinstance(ver, (int, str)):
+        report["warnings"].append("'version' should be int or string.")
+
+    models = doc.get("models")
+    if not isinstance(models, list) or not models:
+        report["errors"].append("'models' must be a non-empty list.")
+        return False, report
+
+    ids: List[str] = []
+    for i, item in enumerate(models):
+        prefix = f"models[{i}]"
+        if not isinstance(item, dict):
+            report["errors"].append(f"{prefix}: entry must be a mapping/dict.")
+            continue
+        # Required minimal fields
+        mid = item.get("id")
+        repo = item.get("repo")
+        filename = item.get("filename")
+        if not mid:
+            report["errors"].append(f"{prefix}: missing required field 'id'.")
+        else:
+            ids.append(str(mid))
+        if not repo:
+            report["errors"].append(f"{prefix} ({mid or '?' }): missing 'repo'.")
+        if not filename:
+            report["errors"].append(f"{prefix} ({mid or '?' }): missing 'filename'.")
+
+        # Types and ranges
+        if "file_size_mb" in item and not isinstance(
+            item.get("file_size_mb"), (int, float)
+        ):
+            report["warnings"].append(
+                f"{prefix} ({mid}): 'file_size_mb' should be number."
+            )
+
+        # context_window / context_windows
+        ctx = item.get("context_window", item.get("context_windows"))
+        if ctx is not None and not isinstance(ctx, int):
+            report["errors"].append(f"{prefix} ({mid}): context_window should be int.")
+
+        # recommended_ram_gb
+        rg = item.get("recommended_ram_gb")
+        if rg is not None and not isinstance(rg, (int, float)):
+            report["errors"].append(
+                f"{prefix} ({mid}): recommended_ram_gb should be number."
+            )
+
+        # tags
+        tags = item.get("tags")
+        if tags is not None and not isinstance(tags, list):
+            report["errors"].append(f"{prefix} ({mid}): tags should be a list.")
+
+        # New fields
+        ngl = item.get("n_gpu_layers")
+        if ngl is not None and (not isinstance(ngl, int) or ngl < 0):
+            report["errors"].append(f"{prefix} ({mid}): n_gpu_layers must be int >= 0.")
+        ot = item.get("output_tokens")
+        if ot is not None and (not isinstance(ot, int) or ot <= 0):
+            report["errors"].append(f"{prefix} ({mid}): output_tokens must be int > 0.")
+
+    # Unique ids
+    seen = set()
+    dups = set()
+    for mid in ids:
+        if mid in seen:
+            dups.add(mid)
+        seen.add(mid)
+    if dups:
+        report["errors"].append(f"Duplicate model ids: {', '.join(sorted(dups))}")
+
+    # zero_config_default
+    zdef = doc.get("zero_config_default")
+    if zdef is not None and zdef not in seen:
+        report["errors"].append(
+            f"zero_config_default '{zdef}' not present in models list."
+        )
+
+    report["stats"] = {"total_models": len(models)}
+    return (len(report["errors"]) == 0), report
 
 
 def cmd_models(args):
@@ -115,25 +227,20 @@ def cmd_models(args):
         current = manager.get_current_model()
         stats = manager.get_model_stats()
         explain = getattr(args, "explain", False)
-        # Compute effective model decision for local provider fallback
-        effective_model = current.id
-        effective_note = "explicit default"
+        # Compute effective model via ModelManager (single source of truth)
+        prov_local_model = None
         try:
             from ..utils import load_config
 
             cfg = load_config() or {}
             prov = cfg.get("provider") or {}
-            ptype = prov.get("type")
-            prov_local_model = prov.get("model") if ptype == "local" else None
-            if not stats.get("explicit_default") and prov_local_model:
-                effective_model = prov_local_model
-                effective_note = "provider local fallback"
-            elif not stats.get("explicit_default"):
-                # Legacy built-in default
-                effective_model = manager.config.get("default_model", current.id)
-                effective_note = "legacy default"
+            if prov.get("type") == "local":
+                prov_local_model = prov.get("model")
         except Exception:
             pass
+        effective_model, effective_note = manager.resolve_effective_model(
+            provider_local_model=prov_local_model
+        )
         if getattr(args, "json", False):
             out = {
                 "id": current.id,
@@ -143,6 +250,7 @@ def cmd_models(args):
                 "downloaded": manager.is_downloaded(current.id),
                 "config_source": stats.get("config_source"),
                 "config_path": stats.get("config_path"),
+                "available_ram_gb": stats.get("available_ram_gb"),
             }
             if explain:
                 out["explain"] = {
@@ -212,6 +320,8 @@ def cmd_models(args):
                     "size": model.size,
                     "file_size_mb": model.file_size_mb,
                     "context_window": model.context_window,
+                    "n_gpu_layers": getattr(model, "n_gpu_layers", 0),
+                    "output_tokens": getattr(model, "output_tokens", 4096),
                     "recommended_ram_gb": model.recommended_ram_gb,
                     "tags": model.tags,
                     "downloaded": is_downloaded,
@@ -220,6 +330,45 @@ def cmd_models(args):
             )
         else:
             print(format_model_info(model, is_downloaded, is_current))
+    elif args.models_command == "validate-yaml":
+        # Determine path: user-given or package default
+        path = getattr(args, "path", None)
+        if not path:
+            try:
+                with resources.files("chi_llm").joinpath("models.yaml").open(
+                    "r", encoding="utf-8"
+                ) as f:
+                    # Write to a temp file-like string for validation
+                    import tempfile
+
+                    with tempfile.NamedTemporaryFile(
+                        "w+", delete=False, suffix=".yaml"
+                    ) as tf:
+                        tf.write(f.read())
+                        path = tf.name
+            except Exception:
+                print(
+                    "❌ Could not locate default models.yaml in package. "
+                    "Provide a path."
+                )
+                return
+        ok, report = _validate_models_yaml(path)
+        if getattr(args, "json", False):
+            _print_json({"ok": ok, **report, "path": path})
+            return
+        if ok:
+            total = report["stats"].get("total_models", 0)
+            print(f"✅ Valid models catalog ({total} models)")
+        else:
+            print("❌ Invalid models catalog")
+            if report.get("errors"):
+                print("Errors:")
+                for e in report["errors"]:
+                    print(f" - {e}")
+        if report.get("warnings"):
+            print("Warnings:")
+            for w in report["warnings"]:
+                print(f" - {w}")
 
 
 def register(subparsers: _SubParsersAction):
@@ -260,3 +409,9 @@ def register(subparsers: _SubParsersAction):
     models_info.add_argument("model_id", help="Model ID")
     models_info.add_argument("--json", action="store_true", help="Output JSON")
     models_parser.set_defaults(func=cmd_models)
+
+    v_yaml = models_sub.add_parser("validate-yaml", help="Validate a models YAML file")
+    v_yaml.add_argument(
+        "path", nargs="?", help="Path to models YAML (defaults to package file)"
+    )
+    v_yaml.add_argument("--json", action="store_true", help="Output JSON report")

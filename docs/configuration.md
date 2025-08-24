@@ -272,6 +272,8 @@ CMD ["python", "/app/main.py"]
 
 chi_llm supports multiple backends via a minimal provider abstraction. The default is local llama.cpp with GGUF models. You can declare a provider in config or via environment variables.
 
+Note on model catalog: the curated list of recommended local models is now YAML-backed and shipped with the package (`chi_llm/models.yaml`). It includes metadata (repo, filename, RAM, context window, n_gpu_layers, default output tokens, tags) and a `zero_config_default` that defines which model is used in true zero-config scenarios. You can override the catalog via `CHI_LLM_MODELS_YAML=/path/to/your.yaml`.
+
 ### Config File
 
 YAML:
@@ -373,6 +375,10 @@ export CHI_LLM_PROVIDER_TYPE=lmstudio
 export CHI_LLM_PROVIDER_HOST=127.0.0.1
 export CHI_LLM_PROVIDER_PORT=1234
 export CHI_LLM_PROVIDER_MODEL=my-local-model
+export CHI_LLM_PROVIDER_MODEL_PATH=/absolute/path/to/model.gguf  # local provider can use a direct file path
+export CHI_LLM_PROVIDER_CONTEXT_WINDOW=32768  # or CHI_LLM_PROVIDER_CONTEXT
+export CHI_LLM_PROVIDER_N_GPU_LAYERS=0
+export CHI_LLM_PROVIDER_OUTPUT_TOKENS=1024
 ```
 
 Usage stays the same in code; MicroLLM automatically routes calls:

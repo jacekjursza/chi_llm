@@ -1,0 +1,236 @@
+version: 1
+zero_config_default: gemma-270m
+models:
+  - id: gemma-270m
+    name: Gemma 3 270M
+    size: "270M"
+    file_size_mb: 385
+    repo: lmstudio-community/gemma-3-270m-it-GGUF
+    filename: gemma-3-270m-it-Q8_0.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Ultra-lightweight, fast inference, good for basic tasks
+    recommended_ram_gb: 2.0
+    tags: [tiny, fast, cpu-friendly, default]
+
+  - id: qwen3-0.6b
+    name: Qwen3 0.6B
+    size: "0.6B"
+    file_size_mb: 500
+    repo: Qwen/Qwen3-0.6B-GGUF
+    filename: qwen3-0.6b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Tiny but capable, supports thinking/non-thinking modes
+    recommended_ram_gb: 1.5
+    tags: [tiny, versatile, thinking-mode]
+
+  - id: qwen3-1.7b
+    name: Qwen3 1.7B
+    size: "1.7B"
+    file_size_mb: 1100
+    repo: Qwen/Qwen3-1.7B-GGUF
+    filename: qwen3-1.7b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Best performing model under 2B, thinking mode support
+    recommended_ram_gb: 3.0
+    tags: [small, balanced, recommended, thinking-mode]
+
+  - id: stablelm-2-1.6b
+    name: StableLM 2 1.6B
+    size: "1.6B"
+    file_size_mb: 1100
+    repo: lmstudio-community/stablelm-2-1_6b-GGUF
+    filename: stablelm-2-1_6b-Q4_K_M.gguf
+    context_window: 4096
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Stable Diffusion's language model, good general performance
+    recommended_ram_gb: 3.0
+    tags: [small, stable]
+
+  - id: gemma2-2b
+    name: Gemma 2 2B
+    size: "2B"
+    file_size_mb: 1420
+    repo: bartowski/gemma-2-2b-it-GGUF
+    filename: gemma-2-2b-it-Q4_K_M.gguf
+    context_window: 8192
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Google's efficient 2B model, great quality/size ratio
+    recommended_ram_gb: 4.0
+    tags: [medium, google, efficient]
+
+  - id: phi2-2.7b
+    name: Phi-2
+    size: "2.7B"
+    file_size_mb: 1680
+    repo: lmstudio-community/Phi-2-GGUF
+    filename: Phi-2-Q4_K_M.gguf
+    context_window: 2048
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Microsoft's small model, strong reasoning capabilities
+    recommended_ram_gb: 4.0
+    tags: [medium, microsoft, reasoning]
+
+  - id: stablelm-3b
+    name: StableLM 3B
+    size: "2.8B"
+    file_size_mb: 1800
+    repo: lmstudio-community/stablelm-3b-4e1t-GGUF
+    filename: stablelm-3b-4e1t-Q4_K_M.gguf
+    context_window: 4096
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Best performing 3B model, trained on 4 trillion tokens
+    recommended_ram_gb: 4.0
+    tags: [medium, high-quality]
+
+  - id: phi3-mini
+    name: Phi-3 Mini
+    size: "3.8B"
+    file_size_mb: 2400
+    repo: microsoft/Phi-3-mini-4k-instruct-gguf
+    filename: Phi-3-mini-4k-instruct-q4.gguf
+    context_window: 4096
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Microsoft's champion model, performs like 7B but runs like 3B
+    recommended_ram_gb: 5.0
+    tags: [large, best-quality, microsoft, recommended]
+
+  - id: qwen3-8b
+    name: Qwen3 8B
+    size: "8B"
+    file_size_mb: 5500
+    repo: Qwen/Qwen3-8B-GGUF
+    filename: qwen3-8b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Latest Qwen3, excellent reasoning and multilingual support
+    recommended_ram_gb: 9.0
+    tags: [large, multilingual, latest, thinking-mode]
+
+  - id: gemma2-9b
+    name: Gemma 2 9B (Q2_K)
+    size: "9B"
+    file_size_mb: 3900
+    repo: bartowski/gemma-2-9b-it-GGUF
+    filename: gemma-2-9b-it-Q2_K.gguf
+    context_window: 8192
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Heavily quantized 9B model that runs like 4B
+    recommended_ram_gb: 6.0
+    tags: [large, compressed, powerful]
+
+  - id: liquid-lfm2-1.2b
+    name: Liquid LFM2 1.2B
+    size: "1.2B"
+    file_size_mb: 1250
+    repo: LiquidAI/LFM2-1.2B-GGUF
+    filename: LFM2-1.2B-Q8_0.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Blazingly fast hybrid architecture, excels at math & multilingual
+    recommended_ram_gb: 2.5
+    tags: [small, fast, multilingual, math, hybrid]
+
+  - id: deepseek-r1-qwen-1.5b
+    name: DeepSeek R1 Distill Qwen 1.5B
+    size: "1.5B"
+    file_size_mb: 1600
+    repo: bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF
+    filename: DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Distilled from DeepSeek R1, strong reasoning capabilities
+    recommended_ram_gb: 3.0
+    tags: [small, reasoning, distilled]
+
+  - id: qwen3-4b-thinking
+    name: Qwen3 4B Thinking 2507
+    size: "4B"
+    file_size_mb: 2800
+    repo: qwen/qwen3-4b-thinking-2507-gguf
+    filename: qwen3-4b-thinking-2507-Q5_K_M.gguf
+    context_window: 262144
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Advanced reasoning with thinking capability, 256K context
+    recommended_ram_gb: 5.0
+    tags: [medium, reasoning, thinking, long-context, "256k"]
+
+  - id: qwen3-4b
+    name: Qwen3 4B Instruct 2507
+    size: "4B"
+    file_size_mb: 2800
+    repo: qwen/qwen3-4b-2507-gguf
+    filename: qwen3-4b-2507-Q5_K_M.gguf
+    context_window: 262144
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Enhanced general capabilities, 256K context
+    recommended_ram_gb: 5.0
+    tags: [medium, general, long-context, "256k"]
+
+  - id: qwen2.5-coder-0.5b
+    name: Qwen2.5 Coder 0.5B
+    size: "0.5B"
+    file_size_mb: 500
+    repo: Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF
+    filename: qwen2.5-coder-0.5b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Tiny coding assistant, perfect for IDE integration
+    recommended_ram_gb: 1.5
+    tags: [tiny, coding, fast, ide]
+
+  - id: qwen2.5-coder-1.5b
+    name: Qwen2.5 Coder 1.5B
+    size: "1.5B"
+    file_size_mb: 1100
+    repo: Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF
+    filename: qwen2.5-coder-1.5b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Small but capable coding model
+    recommended_ram_gb: 2.5
+    tags: [small, coding, balanced]
+
+  - id: qwen2.5-coder-3b
+    name: Qwen2.5 Coder 3B
+    size: "3B"
+    file_size_mb: 2100
+    repo: Qwen/Qwen2.5-Coder-3B-Instruct-GGUF
+    filename: qwen2.5-coder-3b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Powerful coding model with good performance
+    recommended_ram_gb: 4.0
+    tags: [medium, coding, powerful]
+
+  - id: qwen2.5-coder-7b
+    name: Qwen2.5 Coder 7B
+    size: "7B"
+    file_size_mb: 4900
+    repo: Qwen/Qwen2.5-Coder-7B-Instruct-GGUF
+    filename: qwen2.5-coder-7b-instruct-q5_k_m.gguf
+    context_window: 32768
+    n_gpu_layers: 0
+    output_tokens: 4096
+    description: Professional-grade coding model, excellent for complex tasks
+    recommended_ram_gb: 8.0
+    tags: [large, coding, professional, complex]

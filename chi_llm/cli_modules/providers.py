@@ -72,6 +72,10 @@ def cmd_providers(args):
             "host": provider.get("host"),
             "port": provider.get("port"),
             "model": provider.get("model"),
+            "model_path": provider.get("model_path"),
+            "context_window": provider.get("context_window"),
+            "n_gpu_layers": provider.get("n_gpu_layers"),
+            "output_tokens": provider.get("output_tokens"),
             "api_key": bool(provider.get("api_key"))
             if provider.get("api_key")
             else False,
@@ -92,6 +96,14 @@ def cmd_providers(args):
                 print(f"Host: {info['host']}:{info.get('port')}")
             if info.get("model"):
                 print(f"Model: {info['model']}")
+            if info.get("model_path"):
+                print(f"Model path: {info['model_path']}")
+            if info.get("context_window"):
+                print(f"Context window: {info['context_window']}")
+            if info.get("n_gpu_layers") is not None:
+                print(f"n_gpu_layers: {info['n_gpu_layers']}")
+            if info.get("output_tokens"):
+                print(f"Output tokens: {info['output_tokens']}")
             if info.get("config_source"):
                 print(f"Config: {info['config_source']} -> {info.get('config_path')}")
         return
@@ -113,8 +125,25 @@ def cmd_providers(args):
                 provider_cfg["port"] = args.port
         if getattr(args, "model", None):
             provider_cfg["model"] = args.model
+        if getattr(args, "model_path", None):
+            provider_cfg["model_path"] = args.model_path
         if getattr(args, "api_key", None):
             provider_cfg["api_key"] = args.api_key
+        if getattr(args, "context_window", None) is not None:
+            try:
+                provider_cfg["context_window"] = int(args.context_window)
+            except Exception:
+                provider_cfg["context_window"] = args.context_window
+        if getattr(args, "n_gpu_layers", None) is not None:
+            try:
+                provider_cfg["n_gpu_layers"] = int(args.n_gpu_layers)
+            except Exception:
+                provider_cfg["n_gpu_layers"] = args.n_gpu_layers
+        if getattr(args, "output_tokens", None) is not None:
+            try:
+                provider_cfg["output_tokens"] = int(args.output_tokens)
+            except Exception:
+                provider_cfg["output_tokens"] = args.output_tokens
 
         # Determine write target
         target = _resolve_save_target(getattr(args, "local", False))
@@ -136,6 +165,10 @@ def cmd_providers(args):
                         "host": provider_cfg.get("host"),
                         "port": provider_cfg.get("port"),
                         "model": provider_cfg.get("model"),
+                        "model_path": provider_cfg.get("model_path"),
+                        "context_window": provider_cfg.get("context_window"),
+                        "n_gpu_layers": provider_cfg.get("n_gpu_layers"),
+                        "output_tokens": provider_cfg.get("output_tokens"),
                         "api_key_set": bool(provider_cfg.get("api_key")),
                     },
                     "scope": scope,
@@ -185,6 +218,30 @@ def register(subparsers: _SubParsersAction):
     setp.add_argument("--host", help="Provider host", default=None)
     setp.add_argument("--port", help="Provider port", default=None)
     setp.add_argument("--model", help="Default model for the provider", default=None)
+    setp.add_argument(
+        "--model-path",
+        dest="model_path",
+        help="Absolute path to a local GGUF model file (local provider)",
+        default=None,
+    )
+    setp.add_argument(
+        "--context-window",
+        dest="context_window",
+        help="Override context window (n_ctx) for local provider",
+        default=None,
+    )
+    setp.add_argument(
+        "--n-gpu-layers",
+        dest="n_gpu_layers",
+        help="Number of layers offloaded to GPU for local provider",
+        default=None,
+    )
+    setp.add_argument(
+        "--output-tokens",
+        dest="output_tokens",
+        help="Default max output tokens for local provider",
+        default=None,
+    )
     setp.add_argument("--api-key", dest="api_key", help="API key (if required)")
     setp.add_argument("--local", action="store_true", help="Write to project config")
     setp.add_argument("--json", action="store_true", help="Echo saved config as JSON")

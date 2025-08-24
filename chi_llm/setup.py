@@ -7,7 +7,8 @@ Helps users download and configure models.
 import json
 from pathlib import Path
 
-from .models import ModelManager, MODELS, format_model_info
+from .models import ModelManager, MODELS
+from .model_utils import format_model_info
 from .core import MODEL_DIR
 
 try:

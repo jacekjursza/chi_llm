@@ -59,6 +59,7 @@ class MicroLLM:
         self._router = None  # Multi-provider router when configured
         self.tags: Optional[List[str]] = None
         provider_local_model: Optional[str] = None
+        provider_local_model_path: Optional[str] = None
         try:
             cfg = load_config()
             provider = cfg.get("provider") if isinstance(cfg, dict) else None
@@ -78,6 +79,9 @@ class MicroLLM:
                     prov_model = provider.get("model")
                     if isinstance(prov_model, str) and prov_model:
                         provider_local_model = prov_model
+                    prov_model_path = provider.get("model_path")
+                    if isinstance(prov_model_path, str) and prov_model_path:
+                        provider_local_model_path = prov_model_path
                 elif provider.get("type") == "lmstudio":
                     # Initialize LM Studio provider; do not load local model
                     try:
@@ -179,18 +183,42 @@ class MicroLLM:
                 from .models import ModelManager  # local import to avoid cycles
 
                 manager = ModelManager()
-                resolved_id = manager.get_current_model().id
-                # Use manager's choice only when it comes from an explicit source
-                if self.model_id is None and manager.has_explicit_default():
-                    self.model_id = resolved_id
-                # If no explicit default and a local provider model is declared,
-                # prefer provider as a fallback.
-                if (
-                    provider_local_model
-                    and self.model_id is None
-                    and not manager.has_explicit_default()
-                ):
-                    self.model_id = provider_local_model
+                if provider_local_model_path:
+                    # Use explicit file path; skip model id resolution
+                    self.model_path = provider_local_model_path
+                    # Adopt default output tokens if provided
+                    try:
+                        ot = (
+                            provider.get("output_tokens")
+                            if isinstance(provider, dict)
+                            else None
+                        )
+                        if isinstance(ot, int) and ot > 0:
+                            self.max_tokens = ot
+                    except Exception:
+                        pass
+                elif self.model_id is None:
+                    effective_id, decision = manager.resolve_effective_model(
+                        provider_local_model=provider_local_model
+                    )
+                    # Only set model_id when decision is not legacy default;
+                    # legacy default path uses MODEL_REPO/MODEL_FILE constants.
+                    if decision != "legacy default":
+                        self.model_id = effective_id
+                # If we have a known model, pick its suggested output_tokens
+                # when the user kept the default value
+                if self.model_id and self.max_tokens == 4096:
+                    try:
+                        from .models import MODELS as _MODELS
+
+                        if self.model_id in _MODELS:
+                            maybe_ot = getattr(
+                                _MODELS[self.model_id], "output_tokens", None
+                            )
+                            if isinstance(maybe_ot, int) and maybe_ot > 0:
+                                self.max_tokens = maybe_ot
+                    except Exception:
+                        pass
             except Exception:
                 # If anything goes wrong, proceed with legacy fallback
                 pass
@@ -276,17 +304,40 @@ class MicroLLM:
             if self.verbose:
                 print("🤖 Loading model...")
 
-            # Get context window size from model info if available
+            # Get context window and n_gpu_layers
             context_window = 32768  # Default
+            n_gpu_layers = 0
             if HAS_MODEL_MANAGER and self.model_id:
                 if self.model_id in MODELS:
                     context_window = MODELS[self.model_id].context_window
+                    try:
+                        n_gpu_layers = int(
+                            getattr(MODELS[self.model_id], "n_gpu_layers", 0)
+                        )
+                    except Exception:
+                        n_gpu_layers = 0
+            # Allow provider.local to override for direct model_path usage
+            if isinstance(self.provider_config, dict) and (
+                self.provider_config.get("type") == "local"
+            ):
+                try:
+                    pctx = self.provider_config.get("context_window")
+                    if isinstance(pctx, int) and pctx > 0:
+                        context_window = pctx
+                except Exception:
+                    pass
+                try:
+                    ngl = self.provider_config.get("n_gpu_layers")
+                    if isinstance(ngl, int) and ngl >= 0:
+                        n_gpu_layers = ngl
+                except Exception:
+                    pass
 
             model = Llama(
                 model_path=model_path,
                 n_ctx=context_window,
                 n_threads=min(4, os.cpu_count() or 4),
-                n_gpu_layers=0,  # CPU by default for maximum compatibility
+                n_gpu_layers=n_gpu_layers,  # default 0 (CPU) unless overridden
                 verbose=False,
             )
 

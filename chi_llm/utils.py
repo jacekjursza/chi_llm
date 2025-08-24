@@ -98,6 +98,38 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         config.setdefault("provider", {})
         config["provider"]["model"] = provider_model
 
+    provider_model_path = os.environ.get("CHI_LLM_PROVIDER_MODEL_PATH")
+    if provider_model_path:
+        config.setdefault("provider", {})
+        config["provider"]["model_path"] = provider_model_path
+
+    # Optional local-tuning overrides for the 'local' provider
+    provider_ctx = os.environ.get("CHI_LLM_PROVIDER_CONTEXT_WINDOW") or os.environ.get(
+        "CHI_LLM_PROVIDER_CONTEXT"
+    )
+    if provider_ctx:
+        try:
+            config.setdefault("provider", {})
+            config["provider"]["context_window"] = int(provider_ctx)
+        except Exception:
+            pass
+
+    provider_ngl = os.environ.get("CHI_LLM_PROVIDER_N_GPU_LAYERS")
+    if provider_ngl:
+        try:
+            config.setdefault("provider", {})
+            config["provider"]["n_gpu_layers"] = int(provider_ngl)
+        except Exception:
+            pass
+
+    provider_ot = os.environ.get("CHI_LLM_PROVIDER_OUTPUT_TOKENS")
+    if provider_ot:
+        try:
+            config.setdefault("provider", {})
+            config["provider"]["output_tokens"] = int(provider_ot)
+        except Exception:
+            pass
+
     return config
 
 

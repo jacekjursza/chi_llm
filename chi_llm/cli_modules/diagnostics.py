@@ -103,11 +103,6 @@ def _gather() -> dict:
     try:
         mgr = ModelManager() if ModelManager else None
         stats = mgr.get_model_stats() if mgr else {}
-        # Compute effective model similar to `models current --explain`
-        effective_model = stats.get("current_model")
-        effective_note = (
-            "explicit default" if stats.get("explicit_default") else "legacy default"
-        )
         prov_local_model = None
         try:
             from ..utils import load_config
@@ -118,9 +113,11 @@ def _gather() -> dict:
                 prov_local_model = prov.get("model")
         except Exception:
             pass
-        if prov_local_model and not stats.get("explicit_default"):
-            effective_model = prov_local_model
-            effective_note = "provider local fallback"
+        effective_model, effective_note = (
+            (stats.get("current_model"), "explicit default")
+            if mgr is None
+            else mgr.resolve_effective_model(provider_local_model=prov_local_model)
+        )
         data["config"] = {
             "resolution_mode": stats.get("resolution_mode"),
             "allow_global": stats.get("allow_global"),

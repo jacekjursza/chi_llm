@@ -211,6 +211,10 @@ chi-llm models info qwen3-1.7b --json
 # Set default model (must be downloaded)
 chi-llm models set qwen3-1.7b --local   # project only
 chi-llm models set phi3-mini            # global
+
+# Validate a YAML catalog (path optional; defaults to packaged catalog)
+chi-llm models validate-yaml ./chi_llm/models.yaml
+chi-llm models validate-yaml ./chi_llm/models.yaml --json | jq
 ```
 
 ### 🧰 `setup` - Setup and recommendation
@@ -237,6 +241,10 @@ chi-llm providers current --json | jq
 
 # Set provider locally for this project
 chi-llm providers set lmstudio --host 127.0.0.1 --port 1234 --model qwen2.5:latest --local
+# Local provider can point to a specific GGUF file
+chi-llm providers set local --model-path /abs/path/to/model.gguf --local
+# Optional tuning for local provider
+chi-llm providers set local --context-window 32768 --n-gpu-layers 0 --output-tokens 2048 --local
 # Echo saved config as JSON (path + scope)
 chi-llm providers set ollama --host 127.0.0.1 --port 11434 --model llama3.2:latest --json | jq
 
