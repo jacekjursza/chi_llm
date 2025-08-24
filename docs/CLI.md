@@ -235,6 +235,10 @@ chi-llm setup recommend --json | jq
 chi-llm providers list
 chi-llm providers list --json | jq
 
+# Show provider field schemas (for UIs)
+chi-llm providers schema
+chi-llm providers schema --json | jq
+
 # Show current provider (merged from env/files)
 chi-llm providers current
 chi-llm providers current --json | jq
@@ -254,6 +258,7 @@ chi-llm providers set ollama --host 127.0.0.1 --port 11434 --model llama3.2:late
 
 Notes:
 - Supported now: `local`, `lmstudio`, `ollama`, `openai`, `claude-cli`, `openai-cli`. Others (`anthropic`, `groq`, `gemini`) are placeholders.
+- `providers schema` exposes field schemas per type (name, type, required, default) for UIs and automation.
 - Settings are written under the `provider` key in `.chi_llm.json` (local) or the global config.
 - For routing across multiple providers, define `provider_profiles` in your config and set `llm.tags` in code; see `docs/configuration.md`.
 

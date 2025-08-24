@@ -31,6 +31,141 @@ SUPPORTED = [
     {"type": "gemini", "implemented": False},
 ]
 
+# Provider field schema for UI/automation. This reflects what `providers set`
+# accepts today. Extend here if CLI gains new fields.
+PROVIDER_SCHEMAS = {
+    "local": {
+        "fields": [
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Model ID (GGUF)",
+            },
+            {
+                "name": "model_path",
+                "type": "string",
+                "required": False,
+                "help": "Absolute path to GGUF model file",
+            },
+            {
+                "name": "context_window",
+                "type": "int",
+                "required": False,
+                "help": "Override context window (n_ctx)",
+            },
+            {
+                "name": "n_gpu_layers",
+                "type": "int",
+                "required": False,
+                "help": "Layers offloaded to GPU",
+            },
+            {
+                "name": "output_tokens",
+                "type": "int",
+                "required": False,
+                "help": "Default max output tokens",
+            },
+        ]
+    },
+    "lmstudio": {
+        "fields": [
+            {
+                "name": "host",
+                "type": "string",
+                "required": False,
+                "default": "localhost",
+                "help": "Server host",
+            },
+            {
+                "name": "port",
+                "type": "int",
+                "required": False,
+                "default": 1234,
+                "help": "Server port",
+            },
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Default model ID",
+            },
+        ]
+    },
+    "ollama": {
+        "fields": [
+            {
+                "name": "host",
+                "type": "string",
+                "required": False,
+                "default": "localhost",
+                "help": "Server host",
+            },
+            {
+                "name": "port",
+                "type": "int",
+                "required": False,
+                "default": 11434,
+                "help": "Server port",
+            },
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Default model ID",
+            },
+        ]
+    },
+    "openai": {
+        "fields": [
+            {
+                "name": "api_key",
+                "type": "secret",
+                "required": True,
+                "help": "OpenAI API key",
+            },
+            {
+                "name": "base_url",
+                "type": "string",
+                "required": False,
+                "help": "API base URL",
+            },
+            {
+                "name": "org_id",
+                "type": "string",
+                "required": False,
+                "help": "Organization ID",
+            },
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Default model ID",
+            },
+        ]
+    },
+    "claude-cli": {
+        "fields": [
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Default model ID (if applicable)",
+            },
+        ]
+    },
+    "openai-cli": {
+        "fields": [
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Default model ID (if applicable)",
+            },
+        ]
+    },
+}
+
 
 def _print_json(obj: Any) -> None:
     print(json.dumps(obj, indent=2))
@@ -61,6 +196,35 @@ def cmd_providers(args):
                 mark = "✓" if p.get("implemented") else "-"
                 note = f" ({p.get('notes')})" if p.get("notes") else ""
                 print(f"• {p['type']}: {mark}{note}")
+        return
+
+    if sub == "schema":
+        # Output provider field schemas for UI/automation
+        out = {"providers": []}
+        for p in SUPPORTED:
+            ptype = p.get("type")
+            if not ptype:
+                continue
+            schema = PROVIDER_SCHEMAS.get(ptype, {"fields": []})
+            out["providers"].append(
+                {
+                    "type": ptype,
+                    "implemented": bool(p.get("implemented")),
+                    "fields": schema.get("fields", []),
+                }
+            )
+        if getattr(args, "json", False):
+            _print_json(out)
+        else:
+            print("Provider schemas:\n")
+            for prov in out["providers"]:
+                mark = "✓" if prov.get("implemented") else "-"
+                print(f"• {prov['type']} {mark}")
+                for f in prov.get("fields", []):
+                    req = " (required)" if f.get("required") else ""
+                    default = f" [default: {f['default']}]" if "default" in f else ""
+                    print(f"   - {f['name']}: {f['type']}{req}{default}")
+            print()
         return
 
     if sub == "current":
@@ -212,6 +376,9 @@ def register(subparsers: _SubParsersAction):
 
     cur = providers_sub.add_parser("current", help="Show current provider settings")
     cur.add_argument("--json", action="store_true", help="Output JSON")
+
+    sch = providers_sub.add_parser("schema", help="Show provider field schemas")
+    sch.add_argument("--json", action="store_true", help="Output JSON")
 
     setp = providers_sub.add_parser("set", help="Set provider settings")
     setp.add_argument("type", help="Provider type (e.g., lmstudio, ollama, local)")
