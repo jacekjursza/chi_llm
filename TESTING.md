@@ -34,6 +34,36 @@ pytest -v
 pytest -m "not slow"
 ```
 
+## Makefile Shortcuts
+
+For convenience, you can use Make targets:
+
+```bash
+# Quick run without coverage/thresholds (recommended for diagnostics)
+make test-fast
+
+# Full suite with repo defaults (coverage as configured in pytest.ini)
+make test
+
+# Diagnose slow/hanging tests (verbose, show durations)
+make test-diagnose
+
+# Only UI CLI tests (may try to build/launch TUI/Go)
+make test-ui-cli
+
+# CLI tests excluding UI
+make test-cli
+
+# Narrow to specific tests
+make test T=tests/test_core.py::TestMicroLLM::test_generate
+
+# Add extra pytest flags
+make test-fast X="-k 'not ui_cli'"
+
+# Add timeouts (requires pytest-timeout)
+make test-timeout TIMEOUT=60
+```
+
 ## Test Structure
 
 ```
