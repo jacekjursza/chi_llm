@@ -97,19 +97,15 @@ Configuration resolution order (highest priority first):
 4. Global user config (`~/.cache/chi_llm/model_config.json`)
 5. Built-in defaults (gemma-270m with local provider)
 
-### TUI System (Dual Implementation)
+### TUI System
 
 **Go TUI** (`go-chi/`):
-- Primary TUI using Bubble Tea framework
+- Primary and only interactive TUI using Bubble Tea framework
 - Located in `go-chi/internal/tui/`
 - Models, providers, diagnostics views
 - Mouse support, theming, animations
 
-**Python TUI** (`chi_llm/tui/`):
-- Legacy Textual-based implementation
-- MVC architecture with store pattern
-- Controllers handle business logic
-- Views render UI components
+Note: The legacy Python/Textual UI has been removed.
 
 ### Core Module Organization
 

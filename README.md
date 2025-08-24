@@ -568,4 +568,4 @@ Shortcuts:
 - `e` — Export diagnostics to `chi_llm_diagnostics.json`
 - `t` — Toggle theme, `a` — Toggle animation
 
-Legacy: the previous Python/Textual UI is now in maintenance mode.
+Note: the previous Python/Textual UI has been removed. Use the Go TUI under `go-chi/`.

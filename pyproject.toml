@@ -41,9 +41,6 @@ dependencies = [
 standard = [
     "pyyaml>=6.0",
 ]
-ui = [
-    "textual>=0.58,<1",
-]
 full = [
     "pyyaml>=6.0",
     "sentence-transformers>=2.2.0",

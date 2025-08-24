@@ -334,10 +334,10 @@ verbose: false
 export CHI_LLM_CONFIG=/path/to/config.yaml
 ```
 
-### Config command and UI (Textual)
+### Config command and UI (Go TUI)
 
 ```bash
-# Open the interactive Textual UI
+# Open the interactive Go TUI (if built/available)
 chi-llm config
 
 # Read merged config as JSON
@@ -348,7 +348,7 @@ chi-llm config set default_model qwen3-1.7b --scope local   # project
 chi-llm config set preferred_max_tokens 2048 --scope global # user
 ```
 
-Note: The primary interactive UI is now the Go TUI under `go-chi/`. The Textual UI is maintained for compatibility.
+Note: The Python/Textual UI has been removed. The interactive UI is the Go TUI under `go-chi/`. If Go is not available, `chi-llm config` prints instructions to build/run the Go TUI.
 
 ## Advanced Usage
 

@@ -1,14 +1,13 @@
 """
 UI launcher command.
 
-Prefers launching the Go-based TUI (go-chi/chi-tui) when available; falls back
-to the Python Textual TUI if the Go binary or toolchain isn't present.
+Launches the Go-based TUI (go-chi/chi-tui) when available. The legacy
+Python/Textual UI has been removed.
 """
 
 from argparse import _SubParsersAction
 from pathlib import Path
 import json
-import importlib.util
 import os
 import re
 import shutil
@@ -20,26 +19,12 @@ except Exception:  # pragma: no cover
     ModelManager = None  # type: ignore
 
 
-def _print_textual_instructions():
-    print("❌ Textual UI is not installed.")
-    print("\nInstall it with one of:")
-    print("  • pip install 'chi-llm[ui]'")
-    print("  • pip install textual")
-    print("\nThen run: chi-llm config")
-
-
-def _try_launch_textual(ui_args):
-    # Detect textual without importing our TUI module (keeps deps optional)
-    if importlib.util.find_spec("textual") is None:
-        _print_textual_instructions()
-        return
-    try:
-        from ..tui.app import launch_tui  # type: ignore
-
-        launch_tui(ui_args)
-    except Exception as e:
-        print(f"❌ Failed to launch Textual UI: {e}")
-        print("Tip: pip install 'chi-llm[ui]' to install the recommended version.")
+def _print_go_tui_instructions():
+    print("❌ Interactive UI requires the Go TUI (Textual removed).")
+    print("   Install Go >= 1.21 and run one of:")
+    print("     • cd go-chi && go run ./cmd/chi-tui")
+    print("     • build once: cd go-chi && go build -o bin/chi-tui ./cmd/chi-tui")
+    print("       then: ./go-chi/bin/chi-tui")
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -179,11 +164,11 @@ def cmd_ui(args):
     force_rebuild = bool(
         getattr(args, "go_rebuild", False) or os.getenv("CHI_LLM_GO_REBUILD") == "1"
     )
-    # Prefer Go TUI when available
+    # Launch Go TUI when available
     if _try_launch_go(ui_args, force_rebuild=force_rebuild):
         return
-    # Fallback to Textual app or print instructions
-    _try_launch_textual(ui_args)
+    # No fallback: Textual UI was removed
+    _print_go_tui_instructions()
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
