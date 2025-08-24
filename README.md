@@ -552,11 +552,20 @@ Notes:
 - Copy `.env.sample` to `.env` and `source .env` (or use python-dotenv).
  - YAML config is available via `--yaml` (writes `.chi_llm.yaml`).
 
-### UI (Go TUI)
+### UI (Rust TUI)
 
 ```bash
-# Run the interactive Go TUI (Bubble Tea)
-cd go-chi && go run ./cmd/chi-tui
+# Launch the interactive TUI (auto-builds if needed)
+chi-llm ui
+
+# Force rebuild before launch
+chi-llm ui --rebuild
+
+# Pass args to the TUI after -- (example: no alt-screen)
+chi-llm ui -- --no-alt
+
+# Developer run (direct):
+cd tui/chi-tui && cargo run
 ```
 
 Shortcuts:
@@ -568,4 +577,4 @@ Shortcuts:
 - `e` — Export diagnostics to `chi_llm_diagnostics.json`
 - `t` — Toggle theme, `a` — Toggle animation
 
-Note: the previous Python/Textual UI has been removed. Use the Go TUI under `go-chi/`.
+Note: the previous Python/Textual UI has been removed. The Go TUI has been retired. The interactive UI is implemented in Rust/ratatui under `tui/chi-tui/` and is launched via `chi-llm ui`.

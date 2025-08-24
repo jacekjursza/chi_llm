@@ -364,11 +364,17 @@ verbose: false
 export CHI_LLM_CONFIG=/path/to/config.yaml
 ```
 
-### Config command and UI (Go TUI)
+### Config command and UI (Rust TUI)
 
 ```bash
-# Open the interactive Go TUI (if built/available)
-chi-llm config
+# Launch the interactive TUI (auto-builds if needed)
+chi-llm ui
+
+# Force rebuild before launch
+chi-llm ui --rebuild
+
+# Pass through args to the TUI (example: no alt-screen)
+chi-llm ui -- --no-alt
 
 # Read merged config as JSON
 chi-llm config get --json | jq
@@ -378,9 +384,9 @@ chi-llm config set default_model qwen3-1.7b --scope local   # project
 chi-llm config set preferred_max_tokens 2048 --scope global # user
 ```
 
-Note: The Python/Textual UI has been removed. The interactive UI is the Go TUI under `go-chi/`. If Go is not available, `chi-llm config` prints instructions to build/run the Go TUI.
+Note: The Python/Textual UI has been removed. The Go UI has been retired. The interactive UI is implemented in Rust/ratatui (source `tui/chi-tui/`) and launched via `chi-llm ui`.
 
-### Configuration UI (Go TUI)
+### Configuration UI (Rust TUI)
 
 The Diagnostics view integrates `chi-llm diagnostics --json` and `chi-llm models current --explain --json` to present:
 - Environment status and basic connectivity
@@ -498,13 +504,15 @@ chi-llm --help
 chi-llm generate --help
 chi-llm rag query --help
 ```
-# Configuration UI (Go TUI)
+# Configuration UI (Rust TUI)
 
-Primary TUI has moved to Go (Bubble Tea/Bubbles/Lip Gloss) under `go-chi/`.
+Primary interactive UI is implemented in Rust using `ratatui` + `crossterm` under `tui/chi-tui/` and is launched via `chi-llm ui`.
 
-- Launch: `cd go-chi && go run ./cmd/chi-tui`
-- Sections: `1` Welcome, `2` Configure Provider, `3` (Re)Build Configuration
-- Keys: `↑/↓` or `k/j` navigate, `enter` select, `b` back, `t` theme, `a` animation, `q` quit
+- Launch: `chi-llm ui` (auto-builds if needed)
+- Force rebuild: `chi-llm ui --rebuild`
+- Pass-through args: `chi-llm ui -- --no-alt`
+- Sections: `1` Welcome, `2` Configure Provider, `3` (Re)Build Configuration, `4` Diagnostics
+- Keys: `↑/↓` or `k/j` navigate, `enter` select, `b` back, `t` theme, `a` animation, `q` quit, `e` export (Diagnostics)
 - (Re)Build: Enter writes project `.chi_llm.json` with minimal provider config
 
-Legacy Python/Textual UI remains available temporarily via `chi-llm config` but is in maintenance mode.
+Note: The Python/Textual UI has been removed. The Go UI has been retired.
