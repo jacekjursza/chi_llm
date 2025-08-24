@@ -1,6 +1,0 @@
-{
-  "provider": {
-    "model": "gemma-270m",
-    "type": "local"
-  }
-}

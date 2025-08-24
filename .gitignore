@@ -84,4 +84,11 @@ chi_llm/ui_frontend/node_modules/
 
 # Local artifacts
 .pytest_output*.txt
+pytest_output_*.txt
+tmp_commit_msg.txt
 coverage.xml
+
+# Project-local config (do not commit developer-specific overrides)
+.chi_llm.json
+.chi_llm.yaml
+.chi_llm.yml
