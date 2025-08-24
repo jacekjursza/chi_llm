@@ -33,7 +33,8 @@ func New(mode Mode) Styles {
         Highlight: lipgloss.NewStyle().Foreground(lipgloss.Color("#8B5CF6")).Bold(true),
         Help:      lipgloss.NewStyle().Foreground(lipgloss.Color("#94A3B8")).Faint(true),
         // No explicit background on frame; let terminal background show through.
-        Frame:     lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#334155")).Padding(1, 2),
+        // Reduce top padding from 1 to 0 to lift content (incl. animation) up by one row
+        Frame:     lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#334155")).Padding(0, 2),
         Selected:  lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB")).Background(lipgloss.Color("#1E1B4B")).Bold(true),
         Panel:     lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#3F3F46")).Padding(0, 1),
     }

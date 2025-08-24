@@ -14,6 +14,7 @@ import (
     "github.com/charmbracelet/bubbles/v2/textinput"
     "github.com/charmbracelet/bubbles/v2/viewport"
     tea "github.com/charmbracelet/bubbletea/v2"
+    "github.com/charmbracelet/glamour"
     "github.com/charmbracelet/lipgloss/v2"
 
     "go-chi/internal/theme"
@@ -71,6 +72,11 @@ type Model struct {
     tocFocused    bool // Whether TOC has focus (vs content viewport)
     showTOC       bool // Toggle TOC visibility
     currentSection int  // Current section being displayed
+    // Menu cache to prevent flickering
+    cachedMenu       string // Cached rendered menu
+    cachedMenuWidth  int    // Width the menu was cached for
+    cachedMenuHeight int    // Height the menu was cached for
+    cachedMenuPage   Page   // Page the menu was cached for
     // Multi-provider configuration state
     configuredProviders []ConfiguredProvider // Configured providers from chi.tmp.json
     selectedProviderIdx int                  // Currently selected configured provider
@@ -109,7 +115,35 @@ type Model struct {
     isTestingConnection bool
     connectionStatus    ConnectionStatus
     lastTestTime       time.Time
+
+    // Cached layout for Welcome page
+    welcomeTOCWidth int // cached TOC width to keep widths stable across frames
+
+    // Start menu (Welcome) state
+    startMenuItems []startMenuItem
+    startMenuIndex int
 }
+
+// resumeAnimMsg signals that we should re-enable animation after a short pause
+// used to prevent flicker while actively scrolling content.
+type resumeAnimMsg struct{}
+
+func resumeAnimAfterDelay() tea.Cmd {
+    return tea.Tick(220*time.Millisecond, func(time.Time) tea.Msg { return resumeAnimMsg{} })
+}
+
+// startMenuItem represents an entry on the Welcome screen.
+type startMenuItem struct {
+    Label string
+    Page  Page
+    Help  string
+}
+
+// welcomeHeaderLines defines the fixed number of header rows on the Welcome
+// page: 2 lines of grid + 3 lines of hero + 1 spacer = 6 total. Using a
+// constant prevents +/-1 oscillations that can cause the menu to "jump" when
+// scrolling or when the animation ticks.
+const welcomeHeaderLines = 6
 
 // NewModel constructs a new Model instance.
 func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
@@ -119,7 +153,12 @@ func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
     vp := viewport.New(viewport.WithWidth(0), viewport.WithHeight(0))
     vp.MouseWheelEnabled = true
     wtxt := loadWelcome()
-    toc := parseTOC(wtxt)
+    // Render markdown once during initialization with a reasonable default width
+    wtxtRendered := renderMarkdown(wtxt, 80)
+    toc := parseTOC(wtxt) // Parse TOC from raw markdown, not rendered
+    
+    // Set viewport content once during initialization
+    vp.SetContent(wtxtRendered)
     
     // Load configured providers and default provider ID
     configuredProviders, defaultProviderID, _ := ReadMultiProviderConfigWithDefault()
@@ -147,6 +186,17 @@ func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
     nameInput := textinput.New()
     nameInput.Placeholder = "Provider Name"
     
+    // Define start menu items
+    sm := []startMenuItem{
+        {Label: "README.md", Page: PageReadme, Help: "Project overview"},
+        {Label: "Configure Providers", Page: PageConfigure, Help: "Add/edit providers"},
+        {Label: "Select Default", Page: PageSelectDefault, Help: "Choose default provider"},
+        {Label: "Diagnostics", Page: PageDiagnostics, Help: "Environment and status"},
+        {Label: "Build Configuration", Page: PageRebuild, Help: "Write project config"},
+        {Label: "Settings", Page: PageSettings, Help: "General preferences"},
+        {Label: "EXIT", Page: PageExit, Help: "Quit application"},
+    }
+
     return Model{
         keys:      DefaultKeyMap(),
         mode:      mode,
@@ -158,7 +208,7 @@ func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
         spin:      sp,
         help:      hp,
         page:      PageWelcome,
-        welcome:   wtxt,
+        welcome:   wtxtRendered, // Store the rendered markdown
         vp:        vp,
         tocItems:  toc,
         showTOC:   true,
@@ -177,6 +227,9 @@ func NewModel(providers []string, mode theme.Mode, autoQuit bool) Model {
         baseURLInput: baseURLInput,
         orgIDInput:   orgIDInput,
         nameInput:    nameInput,
+        // Start menu
+        startMenuItems: sm,
+        startMenuIndex: 0,
     }
 }
 
@@ -197,8 +250,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         // keep help width sensible
         fw, _ := m.styles.Frame.GetFrameSize()
         m.help.Width = max(0, m.width-fw)
-        // Ensure welcome viewport has non-zero dimensions early
-        if m.page == PageWelcome {
+        // Ensure viewport has stable dimensions early for pages using it
+        if m.page == PageWelcome || m.page == PageReadme {
             m = m.ensureWelcomeViewportSize()
         }
         return m, nil
@@ -241,34 +294,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         // record last key for highlight
         m.lastKey = strings.ToLower(msg.String())
         m.lastKeyAt = time.Now()
-        // Welcome explicit scroll handling to avoid any mapping quirks
+        // Welcome explicit handling: navigate the start menu
         if m.page == PageWelcome {
-            // ensure viewport has dimensions before attempting scroll
-            m = m.ensureWelcomeViewportSize()
             switch m.lastKey {
             case "h":
-                // Toggle TOC visibility (empty panel)
+                // Toggle TOC (not shown on Welcome, but keep behavior consistent)
                 m.showTOC = !m.showTOC
+                m = m.ensureWelcomeViewportSize()
                 return m, nil
             case "up", "k":
-                // Scroll content
-                m.vp.SetYOffset(m.vp.YOffset() - 1)
+                if m.startMenuIndex > 0 { m.startMenuIndex-- }
                 return m, nil
             case "down", "j":
-                // Scroll content
-                m.vp.SetYOffset(m.vp.YOffset() + 1)
+                if m.startMenuIndex < len(m.startMenuItems)-1 { m.startMenuIndex++ }
                 return m, nil
             case "pgup":
-                m.vp.PageUp()
+                m.startMenuIndex = 0
                 return m, nil
             case "pgdown", "space", "f":
-                m.vp.PageDown()
+                if len(m.startMenuItems) > 0 { m.startMenuIndex = len(m.startMenuItems)-1 }
                 return m, nil
-            case "u", "ctrl+u":
-                m.vp.HalfPageUp()
-                return m, nil
-            case "d", "ctrl+d":
-                m.vp.HalfPageDown()
+            case "enter":
+                if len(m.startMenuItems) > 0 {
+                    sel := m.startMenuItems[m.startMenuIndex]
+                    if sel.Page == PageExit {
+                        m.quitting = true
+                        return m, tea.Quit
+                    }
+                    m.page = sel.Page
+                }
                 return m, nil
             }
         }
@@ -301,11 +355,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             // Default: go back to Welcome from any page
             if m.page != PageWelcome {
                 m.page = PageWelcome
+                // Ensure viewport dimensions when entering Welcome
+                m = m.ensureWelcomeViewportSize()
                 return m, nil
             }
             return m, nil
         case key.Matches(msg, m.keys.Sec1):
-            m.page = PageWelcome
+            m.page = PageReadme
+            // Ensure viewport dimensions when entering README
+            m = m.ensureWelcomeViewportSize()
             return m, nil
         case key.Matches(msg, m.keys.Sec2):
             m.page = PageConfigure
@@ -489,7 +547,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         case key.Matches(msg, m.keys.Up):
             switch m.page {
             case PageWelcome:
-                // Let viewport handle scroll on Welcome
+                if m.startMenuIndex > 0 { m.startMenuIndex-- }
+                return m, nil
+            case PageReadme:
                 var cmd tea.Cmd
                 m.vp, cmd = m.vp.Update(msg)
                 return m, cmd
@@ -525,7 +585,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         case key.Matches(msg, m.keys.Down):
             switch m.page {
             case PageWelcome:
-                // Let viewport handle scroll on Welcome
+                if m.startMenuIndex < len(m.startMenuItems)-1 { m.startMenuIndex++ }
+                return m, nil
+            case PageReadme:
                 var cmd tea.Cmd
                 m.vp, cmd = m.vp.Update(msg)
                 return m, cmd
@@ -573,6 +635,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             
         case key.Matches(msg, m.keys.Enter):
             switch m.page {
+            case PageWelcome:
+                if len(m.startMenuItems) > 0 {
+                    sel := m.startMenuItems[m.startMenuIndex]
+                    m.page = sel.Page
+                }
+                return m, nil
             case PageConfigure:
                 if m.showingTags {
                     // Toggle tag selection
@@ -764,12 +832,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                         m = m.showSaveSuccessBanner("✅ Saved " + p)
                         // Don't quit - go back to welcome page instead
                         m.page = PageWelcome
+                        m = m.ensureWelcomeViewportSize()
                         return m, hideSaveBannerAfterDelay()
                     } else {
                         m.lastSaved = "(error writing to current directory)"
                         m = m.showSaveSuccessBanner("❌ Error saving config")
                         // Don't quit - go back to welcome page instead
                         m.page = PageWelcome
+                        m = m.ensureWelcomeViewportSize()
                         return m, hideSaveBannerAfterDelay()
                     }
                 } else {
@@ -780,12 +850,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                         m = m.showSaveSuccessBanner("✅ Saved " + p + " (global)")
                         // Don't quit - go back to welcome page instead
                         m.page = PageWelcome
+                        m = m.ensureWelcomeViewportSize()
                         return m, hideSaveBannerAfterDelay()
                     } else {
                         m.lastSaved = "(error writing config file)"
                         m = m.showSaveSuccessBanner("❌ Error saving config")
                         // Don't quit - go back to welcome page instead
                         m.page = PageWelcome
+                        m = m.ensureWelcomeViewportSize()
                         return m, hideSaveBannerAfterDelay()
                     }
                 }
@@ -798,8 +870,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                 return m, tea.Quit
             }
         default:
-            // If we're on Welcome and the key wasn't handled above, let the viewport process it
-            if m.page == PageWelcome {
+            // If we're on a viewport page and the key wasn't handled above, let the viewport process it
+            if m.page == PageReadme {
                 var cmd tea.Cmd
                 m.vp, cmd = m.vp.Update(msg)
                 return m, cmd
@@ -817,6 +889,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         var cmd tea.Cmd
         m.spin, cmd = m.spin.Update(msg)
         return m, cmd
+    case resumeAnimMsg:
+        if !m.anim.Enabled {
+            m.anim.Enabled = true
+            return m, m.anim.Tick()
+        }
+        return m, nil
     case modelListMsg:
         if msg.Err != "" {
             m.modelStatus = msg.Err
@@ -828,6 +906,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return m, nil
     case tea.MouseWheelMsg:
         if m.page == PageWelcome {
+            // Navigate menu with wheel
+            mbtn := msg.Mouse().Button
+            if mbtn == tea.MouseWheelDown {
+                if m.startMenuIndex < len(m.startMenuItems)-1 { m.startMenuIndex++ }
+            } else if mbtn == tea.MouseWheelUp {
+                if m.startMenuIndex > 0 { m.startMenuIndex-- }
+            }
+            return m, nil
+        } else if m.page == PageReadme {
             var cmd tea.Cmd
             m.vp, cmd = m.vp.Update(msg)
             return m, cmd
@@ -903,7 +990,8 @@ func (m Model) renderMenu(width, height int) string {
         label string
         page  Page
     }{
-        {"1", "Welcome", PageWelcome},
+        {"ESC", "Main Menu", PageWelcome},
+        {"1", "README.md", PageReadme},
         {"2", "Configure Providers", PageConfigure},
         {"3", "Select Default", PageSelectDefault},
         {"4", "Diagnostics", PageDiagnostics},
@@ -916,7 +1004,8 @@ func (m Model) renderMenu(width, height int) string {
         // Highlight current page
         if item.page == m.page {
             style = m.styles.Selected
-            prefix = "▸ "
+            // Use ASCII pointer to avoid ambiguous glyph width
+            prefix = "> "
         }
         
         line := fmt.Sprintf("%s[%s] %s", prefix, item.key, item.label)
@@ -968,10 +1057,19 @@ func (m Model) View() string {
         innerH = 20
     }
 
+    // Apply a max-width container to avoid stretching on very wide terminals
+    const contentMaxWidth = 110
+    viewW := innerW
+    if viewW > contentMaxWidth {
+        viewW = contentMaxWidth
+    }
+    // Horizontal offset to center the container
+    offsetX := max(0, (innerW-viewW)/2)
+
     // Sections
     // Grid split into top/bottom lines
     gtop, gbottom := "", ""
-    if g := m.anim.RenderGrid(innerW); g != "" {
+    if g := m.anim.RenderGrid(viewW); g != "" {
         parts := strings.SplitN(g, "\n", 2)
         gtop = parts[0]
         if len(parts) > 1 {
@@ -979,7 +1077,7 @@ func (m Model) View() string {
         }
     }
     // Compact hero: scale=1 (no extra vertical margin)
-    hero := m.anim.RenderHero(innerW, 1)
+    hero := m.anim.RenderHero(viewW, 1)
     heroLines := 0
     if hero != "" { heroLines = len(strings.Split(hero, "\n")) }
     // Title and subtitle are overlaid inside hero; no separate lines here
@@ -997,105 +1095,72 @@ func (m Model) View() string {
                 style = m.styles.Selected
                 pointer = m.styles.Highlight.Render("› ")
             }
-            items[i] = padANSI(style.Render(pointer+p), innerW)
+            items[i] = padANSI(style.Render(pointer+p), viewW)
         }
     }
 
-    // Help legend with pressed-key highlight
-    help := padANSI(m.renderLegend(innerW), innerW)
-    themeLbl := padANSI(m.styles.Help.Render(fmt.Sprintf("anim: %v", m.anim.Enabled)), innerW)
+    // Theme status indicator only
+    themeLbl := padANSI(m.styles.Help.Render(fmt.Sprintf("anim: %v", m.anim.Enabled)), viewW)
 
     // Build content lines
     var lines []string
+    // Count actual header lines as we build them
+    actualHeaderLines := 0
+    
     // Place top grid line above hero (if present)
-    if gtop != "" { lines = append(lines, gtop) }
-    if hero != "" { lines = append(lines, strings.Split(hero, "\n")...) }
+    if gtop != "" { 
+        lines = append(lines, gtop)
+        actualHeaderLines++
+    }
+    if hero != "" { 
+        heroSplit := strings.Split(hero, "\n")
+        lines = append(lines, heroSplit...)
+        actualHeaderLines += len(heroSplit)
+    }
     // Place bottom grid line directly under hero
-    if gbottom != "" { lines = append(lines, gbottom) }
-    // One spacer line under the animation before content; pages add their own content
-    lines = append(lines, strings.Repeat(" ", innerW))
-    // Body per page
-    // header height (top grid + hero + bottom grid + spacer)
-    headerLines := 0
-    if gtop != "" { headerLines++ }
-    headerLines += heroLines
-    if gbottom != "" { headerLines++ }
-    headerLines++ // spacer under grid
+    if gbottom != "" { 
+        lines = append(lines, gbottom)
+        actualHeaderLines++
+    }
+    // One spacer line under the animation before content
+    lines = append(lines, strings.Repeat(" ", viewW))
+    actualHeaderLines++
+    
+        // Use a fixed header count to avoid jitter from +/-1 oscillations
+        // caused by animation reflows. The actualHeaderLines built above
+        // should equal welcomeHeaderLines, but we intentionally lock to a
+        // constant for stability.
+        headerLines := welcomeHeaderLines
 
     switch m.page {
     case PageWelcome:
-        bodyHeight := max(3, innerH-headerLines-2) // leave lines for help/theme
-        
-        // Calculate TOC and content widths
-        tocWidth := 0
-        if m.showTOC && len(m.tocItems) > 0 {
-            tocWidth = innerW / 3 // 33% for TOC (was 25%)
-            if tocWidth < 25 {
-                tocWidth = 25 // Minimum width (was 20)
-            }
-            if tocWidth > 50 {
-                tocWidth = 50 // Maximum width (was 40)
-            }
+        bodyHeight := max(3, innerH-headerLines-1) // leave line for theme status only
+
+        // Fill body with blank lines; the start menu is rendered as an overlay
+        for i := 0; i < bodyHeight; i++ {
+            lines = append(lines, "")
         }
-        contentWidth := innerW - tocWidth
-        if tocWidth > 0 {
-            contentWidth -= 3 // Space for separator " │ "
-        }
-        
-        // Set viewport size and content first
-        pw, ph := m.styles.Panel.GetFrameSize()
-        vpWidth := max(0, contentWidth-pw)
-        vpHeight := max(1, bodyHeight-ph)
-        if m.vp.Width() != vpWidth { m.vp.SetWidth(vpWidth) }
-        if m.vp.Height() != vpHeight { m.vp.SetHeight(vpHeight) }
-        
-        // Always show full content, not sections
-        m.vp.SetContent(m.welcome)
-        
-        // Build the display line by line
-        if m.showTOC {
-            // Render both panels
-            menuLines := strings.Split(m.renderMenu(tocWidth, bodyHeight), "\n")
-            contentPanel := m.styles.Panel.Render(m.vp.View())
-            contentLines := strings.Split(contentPanel, "\n")
-            
-            // Ensure both have same number of lines
-            for len(menuLines) < bodyHeight {
-                menuLines = append(menuLines, "")
-            }
-            for len(contentLines) < bodyHeight {
-                contentLines = append(contentLines, "")
-            }
-            
-            // Combine line by line with proper padding
-            for i := 0; i < bodyHeight && i < len(menuLines) && i < len(contentLines); i++ {
-                // Pad menu line to fixed width
-                menuLine := padANSI(menuLines[i], tocWidth)
-                // Combine with separator and content
-                line := menuLine + " │ " + contentLines[i]
-                lines = append(lines, line)
-            }
-        } else {
-            // No TOC, just show content panel
-            contentPanel := m.styles.Panel.Render(m.vp.View())
-            lines = append(lines, strings.Split(contentPanel, "\n")...)
-        }
-        
-        // Simple status line
-        status := "h: toggle menu | arrows/pgup/pgdn: scroll | 1-4: navigate sections"
-        lines = append(lines, padANSI(m.styles.Help.Render(status), innerW))
+        // Status line
+        status := "↑/↓ select  •  Enter: open  •  q: quit"
+        lines = append(lines, padANSI(m.styles.Help.Render(status), viewW))
+    case PageReadme:
+        // Render viewport content (README)
+        lines = append(lines, strings.Split(m.vp.View(), "\n")...)
+        // Status line
+        status := "arrows/pgup/pgdn: scroll  •  ESC: back"
+        lines = append(lines, padANSI(m.styles.Help.Render(status), viewW))
     case PageConfigure:
-        bodyHeight := max(3, innerH-headerLines-2) // leave lines for help/theme
+        bodyHeight := max(3, innerH-headerLines-1) // leave line for theme status only
         
-        // Calculate menu and content widths (same as Welcome)
+        // Calculate menu and content widths (narrower ~23% of inner width)
         menuWidth := 0
         if m.showTOC {
-            menuWidth = innerW / 3
-            if menuWidth < 25 {
-                menuWidth = 25
+            menuWidth = innerW * 7 / 30
+            if menuWidth < 20 {
+                menuWidth = 20
             }
-            if menuWidth > 50 {
-                menuWidth = 50
+            if menuWidth > 45 {
+                menuWidth = 45
             }
         }
         contentWidth := innerW - menuWidth
@@ -1173,7 +1238,7 @@ func (m Model) View() string {
                 pointer := "  "
                 if i == m.fieldIndex {
                     style = m.styles.Selected
-                    pointer = "▸ "
+                    pointer = "> "
                 }
                 
                 if m.editingField == field && inputComponent != "" {
@@ -1207,7 +1272,7 @@ func (m Model) View() string {
                     
                     if i == m.tagDropdownIndex {
                         style = m.styles.Selected
-                        pointer = "▸ "
+                        pointer = "> "
                     }
                     
                     // Add checkmark for selected tags
@@ -1272,7 +1337,7 @@ func (m Model) View() string {
                     
                     if i == m.selectedProviderIdx {
                         style = m.styles.Selected
-                        pointer = "▸ "
+                        pointer = "> "
                     }
                     
                     // Display provider with tags
@@ -1317,7 +1382,7 @@ func (m Model) View() string {
                     pointer := "  "
                     if i == m.typeDropdownIndex {
                         style = m.styles.Selected
-                        pointer = "▸ "
+                        pointer = "> "
                     }
                     providerLines = append(providerLines, style.Render(pointer+provType))
                 }
@@ -1352,30 +1417,43 @@ func (m Model) View() string {
             }
             
             // Combine line by line with proper padding
-            for i := 0; i < bodyHeight && i < len(menuLines) && i < len(providerLines); i++ {
-                menuLine := padANSI(menuLines[i], menuWidth)
-                contentLine := padANSI(providerLines[i], contentWidth)
+            for i := 0; i < bodyHeight; i++ {
+                menuLine := ""
+                contentLine := ""
+                
+                if i < len(menuLines) {
+                    menuLine = menuLines[i]
+                }
+                if i < len(providerLines) {
+                    contentLine = providerLines[i]
+                }
+                
+                // Pad to fixed widths - ensure consistent width
+                menuLine = padANSI(menuLine, menuWidth)
+                contentLine = padANSI(contentLine, contentWidth)
+                
+                // Combine with separator
                 line := menuLine + " │ " + contentLine
                 lines = append(lines, line)
             }
         } else {
             // No menu, just show provider content
             for _, line := range providerLines {
-                lines = append(lines, padANSI(line, innerW))
+                lines = append(lines, padANSI(line, viewW))
             }
         }
     case PageSelectDefault:
-        bodyHeight := max(3, innerH-headerLines-2) // leave lines for help/theme
+        bodyHeight := max(3, innerH-headerLines-1) // leave line for theme status only
         
-        // Calculate menu and content widths (same as Configure)
+        // Calculate menu and content widths (narrower ~23% of inner width)
         menuWidth := 0
         if m.showTOC {
-            menuWidth = innerW / 3
-            if menuWidth < 25 {
-                menuWidth = 25
+            menuWidth = innerW * 7 / 30
+            if menuWidth < 20 {
+                menuWidth = 20
             }
-            if menuWidth > 50 {
-                menuWidth = 50
+            if menuWidth > 45 {
+                menuWidth = 45
             }
         }
         contentWidth := innerW - menuWidth
@@ -1450,16 +1528,29 @@ func (m Model) View() string {
             }
             
             // Combine line by line with proper padding
-            for i := 0; i < bodyHeight && i < len(menuLines) && i < len(defaultLines); i++ {
-                menuLine := padANSI(menuLines[i], menuWidth)
-                contentLine := padANSI(defaultLines[i], contentWidth)
+            for i := 0; i < bodyHeight; i++ {
+                menuLine := ""
+                contentLine := ""
+                
+                if i < len(menuLines) {
+                    menuLine = menuLines[i]
+                }
+                if i < len(defaultLines) {
+                    contentLine = defaultLines[i]
+                }
+                
+                // Pad to fixed widths - ensure consistent width
+                menuLine = padANSI(menuLine, menuWidth)
+                contentLine = padANSI(contentLine, contentWidth)
+                
+                // Combine with separator
                 line := menuLine + " │ " + contentLine
                 lines = append(lines, line)
             }
         } else {
             // No menu, just show default provider content
             for _, line := range defaultLines {
-                lines = append(lines, padANSI(line, innerW))
+            lines = append(lines, padANSI(line, viewW))
             }
         }
     case PageRebuild:
@@ -1475,45 +1566,45 @@ func (m Model) View() string {
                 style = m.styles.Selected
                 pointer = m.styles.Highlight.Render("› ")
             }
-            lines = append(lines, padANSI(style.Render(pointer+o), innerW))
+            lines = append(lines, padANSI(style.Render(pointer+o), viewW))
         }
     case PageDiagnostics:
-        lines = append(lines, padANSI(m.styles.Subtitle.Render("Diagnostics"), innerW))
+        lines = append(lines, padANSI(m.styles.Subtitle.Render("Diagnostics"), viewW))
         if m.diag.ConfigPath != "" {
-            lines = append(lines, padANSI(m.styles.Normal.Render("config: ")+m.diag.ConfigPath, innerW))
+            lines = append(lines, padANSI(m.styles.Normal.Render("config: ")+m.diag.ConfigPath, viewW))
         } else {
-            lines = append(lines, padANSI(m.styles.Normal.Render("config: (none)"), innerW))
+            lines = append(lines, padANSI(m.styles.Normal.Render("config: (none)"), viewW))
         }
         if m.diag.ProviderType != "" {
-            lines = append(lines, padANSI(m.styles.Normal.Render("provider: ")+m.diag.ProviderType, innerW))
+            lines = append(lines, padANSI(m.styles.Normal.Render("provider: ")+m.diag.ProviderType, viewW))
         }
         if m.diag.ProviderModel != "" {
-            lines = append(lines, padANSI(m.styles.Normal.Render("model: ")+m.diag.ProviderModel, innerW))
+            lines = append(lines, padANSI(m.styles.Normal.Render("model: ")+m.diag.ProviderModel, viewW))
         }
         if len(m.diag.Env) > 0 {
-            lines = append(lines, padANSI(m.styles.Subtitle.Render("env"), innerW))
+            lines = append(lines, padANSI(m.styles.Subtitle.Render("env"), viewW))
             for k, v := range m.diag.Env {
-                lines = append(lines, padANSI(m.styles.Help.Render(k+": ")+v, innerW))
+                lines = append(lines, padANSI(m.styles.Help.Render(k+": ")+v, viewW))
             }
         }
         if len(m.diag.Hints) > 0 {
-            lines = append(lines, padANSI(m.styles.Subtitle.Render("hints"), innerW))
+            lines = append(lines, padANSI(m.styles.Subtitle.Render("hints"), viewW))
             for _, h := range m.diag.Hints {
-                lines = append(lines, padANSI(m.styles.Help.Render("- ")+h, innerW))
+                lines = append(lines, padANSI(m.styles.Help.Render("- ")+h, viewW))
             }
         }
         if m.lastSaved != "" {
-            lines = append(lines, padANSI(m.styles.Help.Render("saved: ")+m.lastSaved, innerW))
+            lines = append(lines, padANSI(m.styles.Help.Render("saved: ")+m.lastSaved, viewW))
         } else {
-            lines = append(lines, padANSI(m.styles.Help.Render("press 'e' to export"), innerW))
+            lines = append(lines, padANSI(m.styles.Help.Render("press 'e' to export"), viewW))
         }
     case PageModelBrowser:
-        lines = append(lines, padANSI(m.styles.Subtitle.Render("Browse models for ")+m.providerForModels, innerW))
+        lines = append(lines, padANSI(m.styles.Subtitle.Render("Browse models for ")+m.providerForModels, viewW))
         if m.modelStatus != "" {
-            lines = append(lines, padANSI(m.styles.Help.Render(m.modelStatus), innerW))
+            lines = append(lines, padANSI(m.styles.Help.Render(m.modelStatus), viewW))
         }
         if len(m.modelItems) == 0 && m.modelStatus == "" {
-            lines = append(lines, padANSI(m.styles.Help.Render("No models"), innerW))
+            lines = append(lines, padANSI(m.styles.Help.Render("No models"), viewW))
         }
         for i, it := range m.modelItems {
             style := m.styles.Normal
@@ -1526,20 +1617,20 @@ func (m Model) View() string {
             if it.SizeMB > 0 {
                 label = fmt.Sprintf("%s  (%d MB)", it.ID, it.SizeMB)
             }
-            lines = append(lines, padANSI(style.Render(pointer+label), innerW))
+            lines = append(lines, padANSI(style.Render(pointer+label), viewW))
         }
     case PageSettings:
-        bodyHeight := max(3, innerH-headerLines-2) // leave lines for help/theme
+        bodyHeight := max(3, innerH-headerLines-1) // leave line for theme status only
         
-        // Calculate menu and content widths (same as Welcome)
+        // Calculate menu and content widths (narrower ~23% of inner width)
         menuWidth := 0
         if m.showTOC {
-            menuWidth = innerW / 3
-            if menuWidth < 25 {
-                menuWidth = 25
+            menuWidth = innerW * 7 / 30
+            if menuWidth < 20 {
+                menuWidth = 20
             }
-            if menuWidth > 50 {
-                menuWidth = 50
+            if menuWidth > 45 {
+                menuWidth = 45
             }
         }
         contentWidth := innerW - menuWidth
@@ -1578,35 +1669,49 @@ func (m Model) View() string {
             }
             
             // Combine line by line with proper padding
-            for i := 0; i < bodyHeight && i < len(menuLines) && i < len(settingsLines); i++ {
-                menuLine := padANSI(menuLines[i], menuWidth)
-                contentLine := padANSI(settingsLines[i], contentWidth)
+            for i := 0; i < bodyHeight; i++ {
+                menuLine := ""
+                contentLine := ""
+                
+                if i < len(menuLines) {
+                    menuLine = menuLines[i]
+                }
+                if i < len(settingsLines) {
+                    contentLine = settingsLines[i]
+                }
+                
+                // Pad to fixed widths - ensure consistent width
+                menuLine = padANSI(menuLine, menuWidth)
+                contentLine = padANSI(contentLine, contentWidth)
+                
+                // Combine with separator
                 line := menuLine + " │ " + contentLine
                 lines = append(lines, line)
             }
         } else {
             // No menu, just show settings content
             for _, line := range settingsLines {
-                lines = append(lines, padANSI(line, innerW))
+                lines = append(lines, padANSI(line, viewW))
             }
         }
     }
-    lines = append(lines, strings.Repeat(" ", innerW), help, themeLbl)
+    // Removed legend (help) - it's already in Actions section
+    lines = append(lines, strings.Repeat(" ", innerW), themeLbl)
 
-    // Fill remaining height so frame renders full-screen
+    // Fill remaining height so frame renders full-screen (respect container width)
     need := innerH - len(lines)
     for i := 0; i < max(0, need); i++ {
-        lines = append(lines, strings.Repeat(" ", innerW))
+        lines = append(lines, strings.Repeat(" ", viewW))
     }
 
-    // Build header/body and compose using lipgloss v2 layers
+    // Build header/body and compose using lipgloss v2 layers (centered container)
 
     header := strings.Join(lines[:headerLines], "\n")
     body := strings.Join(lines[headerLines:], "\n")
 
     layers := []*lipgloss.Layer{
-        lipgloss.NewLayer(body).X(0).Y(headerLines),
-        lipgloss.NewLayer(header).X(0).Y(0),
+        lipgloss.NewLayer(body).X(offsetX).Y(headerLines),
+        lipgloss.NewLayer(header).X(offsetX).Y(0),
     }
     // Overlay title and subtitle inside hero region, aligned to the left
     if m.headerTitle() != "" {
@@ -1614,10 +1719,10 @@ func (m Model) View() string {
         overlayY := 0
         if gtop != "" { overlayY++ }
         if heroLines > 0 { overlayY += heroLines / 2 }
-        layers = append(layers, lipgloss.NewLayer(overlayLine).X(0).Y(overlayY))
+        layers = append(layers, lipgloss.NewLayer(overlayLine).X(offsetX).Y(overlayY))
         // subtitle directly under title
         if overlaySubtitle != "" {
-            layers = append(layers, lipgloss.NewLayer(overlaySubtitle).X(0).Y(overlayY+1))
+            layers = append(layers, lipgloss.NewLayer(overlaySubtitle).X(offsetX).Y(overlayY+1))
         }
     }
     
@@ -1641,6 +1746,78 @@ func (m Model) View() string {
         layers = append(layers, lipgloss.NewLayer(bannerText).X(bannerX).Y(2))
     }
     
+    // Overlay start menu for Welcome page (centered on body)
+    if m.page == PageWelcome && len(m.startMenuItems) > 0 {
+        // Build simple decorated menu block with a gradient header and border
+        title := "Main Menu"
+        itemLines := make([]string, 0, len(m.startMenuItems)*2)
+        maxInner := lipgloss.Width(title)
+        for i, it := range m.startMenuItems {
+            prefix := "  "
+            style := m.styles.Normal
+            if i == m.startMenuIndex {
+                prefix = "> "
+                style = m.styles.Selected
+            }
+            line := style.Render(prefix + it.Label)
+            if lipgloss.Width(line) > maxInner { maxInner = lipgloss.Width(line) }
+            itemLines = append(itemLines, line)
+            if it.Help != "" {
+                help := m.styles.Help.Render("  - " + it.Help)
+                if lipgloss.Width(help) > maxInner { maxInner = lipgloss.Width(help) }
+                itemLines = append(itemLines, help)
+            }
+        }
+        // Padding inside box
+        innerPad := 2
+        menuInnerW := maxInner
+        boxInner := menuInnerW + innerPad*2
+        // Build gradient header using ▀ blocks with purple->blue colors
+        grad := []string{"#7C3AED", "#8B5CF6", "#3B82F6"}
+        var headerGrad strings.Builder
+        for i := 0; i < boxInner; i++ {
+            // map position to gradient index
+            gi := i * (len(grad)-1) / max(1, boxInner-1)
+            st := lipgloss.NewStyle().Foreground(lipgloss.Color(grad[gi]))
+            headerGrad.WriteString(st.Render("▀"))
+        }
+        // Title line centered
+        titleLine := padANSI(title, menuInnerW)
+        titleLine = strings.Repeat(" ", innerPad) + m.styles.Subtitle.Render(titleLine) + strings.Repeat(" ", innerPad)
+        // Build content lines with side borders
+        side := lipgloss.NewStyle().Foreground(lipgloss.Color("#334155"))
+        sideChar := "┃" // thicker vertical border
+        content := make([]string, 0, len(itemLines)+3)
+        // top gradient (with side bars to keep width consistent)
+        content = append(content, side.Render(sideChar)+headerGrad.String()+side.Render(sideChar))
+        // blank spacer under gradient
+        content = append(content, side.Render(sideChar) + titleLine + side.Render(sideChar))
+        // only one spacer to keep block slightly higher
+        // content = append(content, side.Render("|") + strings.Repeat(" ", boxInner) + side.Render("|"))
+        for _, ln := range itemLines {
+            padded := strings.Repeat(" ", innerPad) + padANSI(ln, menuInnerW) + strings.Repeat(" ", innerPad)
+            content = append(content, side.Render(sideChar) + padded + side.Render(sideChar))
+        }
+        // bottom gradient using ▄ (with side bars)
+        var bottomGrad strings.Builder
+        for i := 0; i < boxInner; i++ {
+            gi := i * (len(grad)-1) / max(1, boxInner-1)
+            st := lipgloss.NewStyle().Foreground(lipgloss.Color(grad[gi]))
+            bottomGrad.WriteString(st.Render("▄"))
+        }
+        // add bottom gradient line
+        content = append(content, side.Render(sideChar)+bottomGrad.String()+side.Render(sideChar))
+
+        menuBlock := strings.Join(content, "\n")
+        // Center within body
+        bodyHeight := max(3, innerH-welcomeHeaderLines-1)
+        blockWidth := boxInner + 2 // side bars
+        menuX := offsetX + max(0, (viewW-blockWidth)/2)
+        // Vertical position: bias further upward (~1/6 of remaining space)
+        menuY := welcomeHeaderLines + max(0, (bodyHeight-len(content))/6)
+        layers = append(layers, lipgloss.NewLayer(menuBlock).X(menuX).Y(menuY))
+    }
+    
     canvas := lipgloss.NewCanvas(layers...)
     content := canvas.Render()
     // Expand frame to full terminal size
@@ -1651,7 +1828,9 @@ func (m Model) View() string {
 func (m Model) headerTitle() string {
     switch m.page {
     case PageWelcome:
-        return "chi-llm • welcome"
+        return "chi-llm • menu"
+    case PageReadme:
+        return "chi-llm • README.md"
     case PageConfigure:
         return "chi-llm • configure providers"
     case PageSelectDefault:
@@ -1672,7 +1851,9 @@ func (m Model) headerTitle() string {
 func (m Model) subtitle() string {
     switch m.page {
     case PageWelcome:
-        return "Readme excerpt"
+        return "Main menu"
+    case PageReadme:
+        return "Readme"
     case PageConfigure:
         return "Manage configured providers"
     case PageSelectDefault:
@@ -1695,13 +1876,38 @@ type Page int
 
 const (
     PageWelcome Page = iota
+    PageReadme
     PageConfigure
     PageSelectDefault
     PageDiagnostics
     PageRebuild
     PageModelBrowser
     PageSettings
+    PageExit
 )
+
+// renderMarkdown renders markdown content with glamour
+func renderMarkdown(content string, width int) string {
+    renderer, err := glamour.NewTermRenderer(
+        glamour.WithAutoStyle(),
+        glamour.WithWordWrap(width),
+    )
+    if err != nil {
+        // Fallback to plain text if glamour fails
+        return content
+    }
+    
+    rendered, err := renderer.Render(content)
+    if err != nil {
+        // Fallback to plain text if rendering fails
+        return content
+    }
+    
+    return rendered
+}
+
+// figletText renders ASCII art for a label using figlet4go with caching.
+// (previous figletText removed; menu now uses a lightweight gradient frame)
 
 func loadWelcome() string {
     // Try README.md (or docs/CLI.md) from current dir or parents
@@ -1714,7 +1920,7 @@ func loadWelcome() string {
         }
         for _, p := range candidates {
             if b, err := os.ReadFile(p); err == nil && len(b) > 0 {
-                // Return full content without truncation
+                // Return raw markdown - will be rendered later with glamour
                 return string(b)
             }
         }
@@ -1839,6 +2045,11 @@ func max(a, b int) int {
 
 // padANSI pads s with spaces to target width, accounting for printable width.
 func padANSI(s string, width int) string {
+    // Fast path for empty strings
+    if s == "" {
+        return strings.Repeat(" ", width)
+    }
+    
     w := lipgloss.Width(s)
     if w >= width {
         return s
@@ -1881,25 +2092,31 @@ func (m Model) ensureWelcomeViewportSize() Model {
     if innerW <= 0 || innerH <= 0 {
         return m
     }
-    // Estimate header lines similarly to View
-    g := m.anim.RenderGrid(innerW)
-    gtop, gbottom := 0, 0
-    if g != "" {
-        parts := strings.SplitN(g, "\n", 2)
-        if len(parts) > 0 && parts[0] != "" { gtop = 1 }
-        if len(parts) > 1 && parts[1] != "" { gbottom = 1 }
+    // Fixed header height for stability
+    headerLines := welcomeHeaderLines
+    bodyHeight := max(3, innerH-headerLines-1) // reserve line for theme status only
+
+    // Match content width calculation used in View() to prevent width thrash
+    const contentMaxWidth = 110
+    viewW := innerW
+    if viewW > contentMaxWidth { viewW = contentMaxWidth }
+    tocWidth := 0
+    if m.showTOC && len(m.tocItems) > 0 {
+        tocWidth = viewW * 7 / 30
+        if tocWidth < 20 { tocWidth = 20 }
+        if tocWidth > 45 { tocWidth = 45 }
     }
-    hero := m.anim.RenderHero(innerW, 1)
-    heroLines := 0
-    if hero != "" { heroLines = len(strings.Split(hero, "\n")) }
-    headerLines := gtop + heroLines + gbottom + 1 // + spacer
-    bodyHeight := max(3, innerH-headerLines-2)    // reserve lines for legend/status
-    if m.vp.Width() != innerW { m.vp.SetWidth(innerW) }
-    if m.vp.Height() != bodyHeight { m.vp.SetHeight(bodyHeight) }
-    // Ensure content is set when viewport size changes
-    if m.vp.GetContent() == "" {
-        m.vp.SetContent(m.welcome)
+    contentWidth := viewW - tocWidth
+    if tocWidth > 0 {
+        contentWidth -= 3 // Space for separator " │ "
     }
+
+    vpWidth := max(0, contentWidth)
+    vpHeight := max(1, bodyHeight)
+    if m.vp.Width() != vpWidth { m.vp.SetWidth(vpWidth) }
+    if m.vp.Height() != vpHeight { m.vp.SetHeight(vpHeight) }
+    // Cache TOC width for use in View to keep widths stable across frames
+    m.welcomeTOCWidth = tocWidth
     return m
 }
 

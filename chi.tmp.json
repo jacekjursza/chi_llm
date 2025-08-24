@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "id": "local-1",
+      "name": "local provider",
+      "type": "local",
+      "tags": [
+        "coding",
+        "efficient"
+      ],
+      "config": {
+        "type": "local",
+        "model": "gemma-270m"
+      }
+    }
+  ],
+  "default_provider_id": "local-1"
+}

@@ -13,10 +13,11 @@ import json
 from ..utils import load_config
 
 try:
-    from ..models import ModelManager, MODEL_DIR
+    from ..models import ModelManager, MODEL_DIR, MODELS
 except Exception:  # pragma: no cover - optional
     ModelManager = None  # type: ignore
     MODEL_DIR = Path.home() / ".cache" / "chi_llm"  # type: ignore
+    MODELS = {}  # type: ignore
 
 SUPPORTED = [
     {"type": "local", "implemented": True, "notes": "Default llama.cpp"},
@@ -144,6 +145,30 @@ def cmd_providers(args):
         # Otherwise remain silent to keep pipelines clean.
 
 
+def cmd_list_tags(args):
+    """List all available provider tags from the models catalog."""
+    if not MODELS:
+        print("No models loaded")
+        return
+
+    # Collect all unique tags from models
+    all_tags = set()
+    for model in MODELS.values():
+        if hasattr(model, "tags") and model.tags:
+            all_tags.update(model.tags)
+
+    # Sort tags for consistent output
+    sorted_tags = sorted(all_tags)
+
+    if args.json:
+        _print_json({"tags": sorted_tags})
+    else:
+        print("Available provider tags:")
+        print()
+        for tag in sorted_tags:
+            print(f"• {tag}")
+
+
 def register(subparsers: _SubParsersAction):
     sub = subparsers.add_parser("providers", help="Manage provider configuration")
     providers_sub = sub.add_subparsers(dest="providers_command", help="Provider cmds")
@@ -163,3 +188,7 @@ def register(subparsers: _SubParsersAction):
     setp.add_argument("--api-key", dest="api_key", help="API key (if required)")
     setp.add_argument("--local", action="store_true", help="Write to project config")
     setp.add_argument("--json", action="store_true", help="Echo saved config as JSON")
+
+    tags = providers_sub.add_parser("tags", help="List available provider tags")
+    tags.add_argument("--json", action="store_true", help="Output JSON")
+    tags.set_defaults(func=cmd_list_tags)

@@ -1,5 +1,6 @@
 {
   "provider": {
-    "type": "llamacpp"
+    "model": "gemma-270m",
+    "type": "local"
   }
 }

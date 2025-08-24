@@ -43,7 +43,7 @@ func DefaultKeyMap() KeyMap {
             key.WithHelp("enter", "select"),
         ),
         Quit: key.NewBinding(
-            key.WithKeys("q", "esc", "ctrl+c"),
+            key.WithKeys("q", "ctrl+c"),
             key.WithHelp("q", "quit"),
         ),
         Back: key.NewBinding(
@@ -72,7 +72,7 @@ func DefaultKeyMap() KeyMap {
         ),
         Sec1: key.NewBinding(
             key.WithKeys("1"),
-            key.WithHelp("1", "welcome"),
+            key.WithHelp("1", "readme"),
         ),
         Sec2: key.NewBinding(
             key.WithKeys("2"),
