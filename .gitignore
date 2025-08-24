@@ -82,6 +82,9 @@ docs_tmp/
 # Node UI
 chi_llm/ui_frontend/node_modules/
 
+# Retired Go TUI (kept locally)
+go-chi/
+
 # Local artifacts
 .pytest_output*.txt
 pytest_output_*.txt
@@ -97,3 +100,8 @@ docs/s[0-9]*.png
 .chi_llm.json
 .chi_llm.yaml
 .chi_llm.yml
+
+# Rust build artifacts
+target/
+tui/chi-tui/target/
+**/*.rs.bk
