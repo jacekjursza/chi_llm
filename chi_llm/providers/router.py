@@ -134,5 +134,15 @@ def default_registry() -> Dict[str, Callable[[Dict[str, Any]], Any]]:
         )
     except Exception:
         pass
+    try:
+        from .anthropic import AnthropicProvider  # type: ignore
+
+        reg["anthropic"] = lambda prof: AnthropicProvider(
+            api_key=str(prof.get("api_key", "")),
+            model=prof.get("model"),
+            timeout=float(prof.get("timeout", 30.0)),
+        )
+    except Exception:
+        pass
     # 'local' intentionally lacks factory here; handled by MicroLLM
     return reg

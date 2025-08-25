@@ -141,6 +141,21 @@ class MicroLLM:
                         self._provider = None
                         self._provider_type = "openai"
                         self._provider_error = str(e)
+                elif provider.get("type") == "anthropic":
+                    # Initialize Anthropic provider; defer failures
+                    try:
+                        from .providers.anthropic import AnthropicProvider
+
+                        self._provider = AnthropicProvider(
+                            api_key=str(provider.get("api_key", "")),
+                            model=provider.get("model"),
+                            timeout=float(provider.get("timeout", 30.0)),
+                        )
+                        self._provider_type = "anthropic"
+                    except Exception as e:
+                        self._provider = None
+                        self._provider_type = "anthropic"
+                        self._provider_error = str(e)
                 elif provider.get("type") == "claude-cli":
                     # Initialize Claude CLI provider
                     try:

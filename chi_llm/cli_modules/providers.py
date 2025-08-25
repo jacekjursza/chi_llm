@@ -26,7 +26,7 @@ SUPPORTED = [
     {"type": "openai", "implemented": True, "notes": "API key required"},
     {"type": "claude-cli", "implemented": True, "notes": "Anthropic CLI bridge"},
     {"type": "openai-cli", "implemented": True, "notes": "OpenAI CLI bridge"},
-    {"type": "anthropic", "implemented": False},
+    {"type": "anthropic", "implemented": True, "notes": "API key required"},
     {"type": "groq", "implemented": False},
     {"type": "gemini", "implemented": False},
 ]
@@ -141,6 +141,22 @@ PROVIDER_SCHEMAS = {
                 "type": "string",
                 "required": False,
                 "help": "Default model ID",
+            },
+        ]
+    },
+    "anthropic": {
+        "fields": [
+            {
+                "name": "api_key",
+                "type": "secret",
+                "required": True,
+                "help": "Anthropic API key",
+            },
+            {
+                "name": "model",
+                "type": "string",
+                "required": True,
+                "help": "Default model ID (e.g., claude-3-haiku-20240307)",
             },
         ]
     },

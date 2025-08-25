@@ -423,6 +423,33 @@ print(llm.chat("Hello, Ollama!"))
 
 If Ollama is not reachable, errors include the base URL and a hint to run `ollama serve`.
 
+### Anthropic
+
+Use Anthropic’s hosted API by setting the provider type and API key. Choose a Claude 3 model, e.g., `claude-3-haiku-20240307`.
+
+YAML:
+```yaml
+provider:
+  type: anthropic
+  model: claude-3-haiku-20240307
+  # timeout: 30   # optional
+```
+
+Environment:
+```bash
+export CHI_LLM_PROVIDER_TYPE=anthropic
+export CHI_LLM_PROVIDER_API_KEY=sk-ant-...
+export CHI_LLM_PROVIDER_MODEL=claude-3-haiku-20240307
+```
+
+Usage in code remains the same:
+```python
+from chi_llm import MicroLLM
+
+llm = MicroLLM()
+print(llm.generate("Hello, Claude!"))
+```
+
 ### Check Config Source
 
 ```bash
