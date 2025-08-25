@@ -135,3 +135,34 @@ class OllamaProvider:
     def complete(self, text: str, **kwargs) -> str:
         # Use generate for simple completion
         return self.generate(text, **kwargs)
+
+    # --- Discovery ---
+    @classmethod
+    def discover_models(
+        cls, host: str = "127.0.0.1", port: int | str = 11434, timeout: float = 3.0
+    ) -> List[str]:  # pragma: no cover - network dependent
+        url = f"http://{host}:{port}/api/tags"
+        try:
+            try:
+                import requests  # type: ignore
+
+                r = requests.get(url, timeout=timeout)
+                r.raise_for_status()
+                data = r.json()
+            except ModuleNotFoundError:
+                from urllib import request, error
+
+                req = request.Request(url)
+                try:
+                    with request.urlopen(req, timeout=timeout) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                except error.HTTPError as he:
+                    raise RuntimeError(f"HTTP {he.code}") from he
+        except Exception as e:
+            raise RuntimeError(f"Ollama discover failed: {e}")
+        items: List[str] = []
+        for it in data.get("models") or []:
+            name = it.get("name")
+            if isinstance(name, str) and name:
+                items.append(name)
+        return items

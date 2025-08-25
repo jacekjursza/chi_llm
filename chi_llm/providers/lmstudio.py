@@ -125,3 +125,34 @@ class LmStudioProvider:
     def complete(self, text: str, **kwargs) -> str:
         # For LM Studio, use the same completions endpoint
         return self.generate(text, **kwargs)
+
+    # --- Discovery ---
+    @classmethod
+    def discover_models(
+        cls, host: str = "127.0.0.1", port: int | str = 1234, timeout: float = 3.0
+    ) -> List[str]:  # pragma: no cover - network dependent
+        base = f"http://{host}:{port}/v1/models"
+        try:
+            try:
+                import requests  # type: ignore
+
+                r = requests.get(base, timeout=timeout)
+                r.raise_for_status()
+                data = r.json()
+            except ModuleNotFoundError:
+                from urllib import request, error
+
+                req = request.Request(base)
+                try:
+                    with request.urlopen(req, timeout=timeout) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                except error.HTTPError as he:
+                    raise RuntimeError(f"HTTP {he.code}") from he
+        except Exception as e:
+            raise RuntimeError(f"LM Studio discover failed: {e}")
+        items: List[str] = []
+        for it in data.get("data") or []:
+            mid = it.get("id") or it.get("name")
+            if isinstance(mid, str) and mid:
+                items.append(mid)
+        return items

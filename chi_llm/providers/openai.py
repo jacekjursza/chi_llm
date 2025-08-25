@@ -138,3 +138,49 @@ class OpenAIProvider:
     def complete(self, text: str, **kwargs) -> str:
         # Simple alias to generate
         return self.generate(text, **kwargs)
+
+    # --- Discovery ---
+    @classmethod
+    def discover_models(
+        cls,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        org_id: Optional[str] = None,
+        timeout: float = 5.0,
+    ) -> List[str]:  # pragma: no cover - network dependent
+        key = (api_key or "").strip()
+        if not key:
+            raise RuntimeError("OpenAI discover requires api_key")
+        base = (base_url or "https://api.openai.com").rstrip("/")
+        url = f"{base}/v1/models"
+        try:
+            try:
+                import requests  # type: ignore
+
+                headers = {"Authorization": f"Bearer {key}"}
+                if org_id:
+                    headers["OpenAI-Organization"] = str(org_id)
+                r = requests.get(url, headers=headers, timeout=timeout)
+                r.raise_for_status()
+                data = r.json()
+            except ModuleNotFoundError:
+                from urllib import request, error
+                import json as _json
+
+                req = request.Request(url)
+                req.add_header("Authorization", f"Bearer {key}")
+                if org_id:
+                    req.add_header("OpenAI-Organization", str(org_id))
+                try:
+                    with request.urlopen(req, timeout=timeout) as resp:
+                        data = _json.loads(resp.read().decode("utf-8"))
+                except error.HTTPError as he:
+                    raise RuntimeError(f"HTTP {he.code}") from he
+        except Exception as e:
+            raise RuntimeError(f"OpenAI discover failed: {e}")
+        items: List[str] = []
+        for it in data.get("data") or []:
+            mid = it.get("id") or it.get("name")
+            if isinstance(mid, str) and mid:
+                items.append(mid)
+        return items

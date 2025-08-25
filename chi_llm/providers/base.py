@@ -21,3 +21,10 @@ class Provider(Protocol):
     def complete(self, text: str, **kwargs) -> str:
         """Complete/continue the given text."""
         ...
+
+    # Optional capability: list available models for this provider type.
+    # Implementations may require specific kwargs (e.g., host/port for local servers,
+    # api_key/base_url for external APIs). Returns a list of model IDs.
+    @classmethod
+    def discover_models(cls, **kwargs) -> List[str]:  # pragma: no cover - optional
+        ...
