@@ -22,10 +22,15 @@ except Exception:  # pragma: no cover
 
 def _print_ui_instructions():
     print("❌ Interactive UI not available in this install.")
-    print("   For development, build and run the Rust TUI:")
-    print("     • cd tui/chi-tui && cargo run")
-    print("     • or build: cd tui/chi-tui && cargo build --release")
-    print("       then: ./tui/chi-tui/target/release/chi-tui")
+    print("   Options:")
+    print("     • Install prebuilt 'chi-tui' binary and ensure it's in PATH")
+    print("       (see project Releases), then run: chi-llm ui")
+    print("     • For development, build from source:")
+    print("         cd tui/chi-tui && cargo run")
+    print("       Or build a release binary:")
+    print(
+        "         cd tui/chi-tui && cargo build --release && ./target/release/chi-tui"
+    )
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -72,6 +77,28 @@ def _resolve_cargo_bin() -> str | None:
     if path_bin:
         candidates.append(path_bin)
     return candidates[0] if candidates else None
+
+
+def _resolve_chi_tui_on_path() -> str | None:
+    """Return absolute path to a prebuilt chi-tui binary if found in PATH."""
+    exe = "chi-tui.exe" if os.name == "nt" else "chi-tui"
+    path = shutil.which(exe)
+    return path
+
+
+def _try_launch_prebuilt(ui_args) -> bool:
+    """Try to launch a prebuilt chi-tui from PATH. Returns True if executed
+    (regardless of exit code), False if not available.
+    """
+    path = _resolve_chi_tui_on_path()
+    if not path:
+        return False
+    try:
+        subprocess.run([path, *ui_args])
+        return True
+    except Exception as e:
+        print(f"❌ Failed to launch chi-tui from PATH: {e}")
+        return False
 
 
 def _try_launch_rust(ui_args, force_rebuild: bool = False) -> bool:
@@ -145,6 +172,9 @@ def cmd_ui(args):
     force_rebuild = bool(
         getattr(args, "rebuild", False) or os.getenv("CHI_LLM_UI_REBUILD") == "1"
     )
+    # Preferred: use prebuilt chi-tui binary when present on PATH
+    if _try_launch_prebuilt(ui_args):
+        return
     # Try Rust TUI first
     if _try_launch_rust(ui_args, force_rebuild=force_rebuild):
         return

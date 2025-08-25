@@ -568,6 +568,10 @@ chi-llm ui -- --no-alt
 cd tui/chi-tui && cargo run
 ```
 
+Notes:
+- If you installed via pip and don’t have the source tree, place a prebuilt `chi-tui` binary on your `PATH` (download from Releases). `chi-llm ui` will detect and run it.
+- To build from source instead, clone the repo and run `cargo build --release` in `tui/chi-tui`; `chi-llm ui` will auto-pick it up when launched from the repo.
+
 Shortcuts:
 - `1/2/3` — Sections (Welcome / Configure / (Re)Build)
 - `4` — Diagnostics (status + export JSON)

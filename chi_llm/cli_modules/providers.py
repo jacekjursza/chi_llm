@@ -523,6 +523,21 @@ def register(subparsers: _SubParsersAction):
     )
     disc.set_defaults(func=cmd_discover_models)
 
+    # Find best URL (host/port) for certain providers (WSL-aware)
+    findu = providers_sub.add_parser(
+        "find-url", help="Try to find reachable URL for a provider"
+    )
+    findu.add_argument("--type", dest="ptype", required=True, help="Provider type")
+    findu.add_argument("--host", default=None, help="Hint host (try first)")
+    findu.add_argument("--port", default=None, help="Hint port (try first)")
+    findu.add_argument(
+        "--timeout", default="1.8", help="Probe timeout (seconds) per endpoint"
+    )
+    findu.add_argument("--json", action="store_true", help="Output JSON")
+    from .providers_url import cmd_find_url as _cmd_find_url  # type: ignore
+
+    findu.set_defaults(func=_cmd_find_url)
+
     # Probe/test provider connectivity
     testp = providers_sub.add_parser(
         "test", help="Test provider connectivity (HTTP/API)"
