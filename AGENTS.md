@@ -8,7 +8,7 @@ This document defines how agents work in this repository. General context: kmkkm
 - Agents may run shell commands related to running, developing, or maintaining the app.
 - Agents may write and run temporary Python scripts for testing and development.
 - GitHub access is available.
-  - Early development (0 external users): push directly to `master` by default, no prior approval needed.
+  - Early development (0 external users): push directly to `devel` by default, no prior approval needed.
   - Ask before force-pushing, rewriting history, or changing repository visibility.
   - If no repo exists, ask for project name and visibility (private/public) and then create it.
 
@@ -44,12 +44,13 @@ This document defines how agents work in this repository. General context: kmkkm
 - Before moving to Done: run full test suite, format/lint as configured, update relevant docs, and prepare a commit.
 - On completion, move the card to Done and add a concise changelog entry.
 - Commit changes locally per atomic task (one feature/improvement per commit) with a clear message referencing the Kanban card.
-- Early development: push to `master` by default after successful validation. If policy changes later, switch to PR-based flow.
+- Early development: push to `devel` by default after successful validation. Use `master` only on-demand for releases or explicitly requested deployments.
 
 ### Branching & Pushing Policy
-- Default branch: `master`.
+- Default branch: `devel` (day-to-day work).
+- `master`: release/integration only; push/merge on-demand with intent. Prefer PRs for risky changes or when collaborating externally.
 - Push after each atomic, green task; avoid batching unrelated changes.
-- Avoid force-push; use PRs for risky changes or when collaborating externally.
+- Avoid force-push; coordinate before history rewrites.
 
 ## Commit Messages
 - Style: Conventional Commits.

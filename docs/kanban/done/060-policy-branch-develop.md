@@ -13,12 +13,13 @@ We want to decouple integration/release (`master`) from ongoing development and 
   - Branching & Pushing Policy: working branch `devel`, `master` for releases.
 
 ## Acceptance Criteria
-- `AGENTS.md` clearly states `devel` as the working branch.
-- Notes on using PRs/coordination when targeting `master`.
+- `AGENTS.md` clearly states `devel` as the working branch. (Done)
+- Notes on using PRs/coordination when targeting `master`. (Done)
+
+Status: Done
 
 ## Risks
 - Contributors may still target `master`; mitigate with docs clarity.
 
 ## Estimate
 - S (10–15 min)
-
