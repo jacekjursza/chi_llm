@@ -190,6 +190,19 @@ pub struct FormState {
     pub editing: bool,
     pub message: Option<String>,
     pub scroll: usize,
+    pub initial_hash: String,
+    pub last_test_ok_hash: Option<String>,
+}
+
+pub fn compute_form_hash(fields: &Vec<FormField>) -> String {
+    let mut s = String::new();
+    for f in fields.iter() {
+        s.push_str(&f.schema.name);
+        s.push('=');
+        s.push_str(&f.buffer);
+        s.push('\u{1F}');
+    }
+    s
 }
 
 #[derive(Clone, Debug)]

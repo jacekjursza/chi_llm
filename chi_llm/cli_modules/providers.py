@@ -503,3 +503,29 @@ def register(subparsers: _SubParsersAction):
     tags = providers_sub.add_parser("tags", help="List available provider tags")
     tags.add_argument("--json", action="store_true", help="Output JSON")
     tags.set_defaults(func=cmd_list_tags)
+
+    # Discover models for certain providers (e.g., lmstudio, ollama)
+    disc = providers_sub.add_parser(
+        "discover-models", help="Discover available models for a provider"
+    )
+    disc.add_argument("--type", dest="ptype", required=True, help="Provider type")
+    disc.add_argument("--host", default="localhost", help="Provider host")
+    disc.add_argument("--port", default=None, help="Provider port (int)")
+    disc.add_argument("--json", action="store_true", help="Output JSON")
+    disc.add_argument(
+        "--base-url", dest="base_url", default=None, help="API base URL (OpenAI)"
+    )
+    disc.add_argument(
+        "--api-key", dest="api_key", default=None, help="API key (OpenAI)"
+    )
+    disc.add_argument(
+        "--org-id", dest="org_id", default=None, help="Organization ID (OpenAI)"
+    )
+    disc.set_defaults(func=cmd_discover_models)
+
+
+def cmd_discover_models(args):
+    # Forward to split module to keep this file within size limits
+    from .providers_discovery import cmd_discover_models as _impl
+
+    return _impl(args)

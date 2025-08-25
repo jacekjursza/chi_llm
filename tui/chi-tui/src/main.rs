@@ -48,7 +48,8 @@ fn ensure_form_for_selected(st: &mut ProvidersState) {
             ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone(), options: sc.options.clone() }, buffer: value, cursor: 0 });
         }
     }
-    st.form = Some(FormState { fields: ff, selected: 0, editing: false, message: None, scroll: 0 });
+    let init_hash = providers::compute_form_hash(&ff);
+    st.form = Some(FormState { fields: ff, selected: 0, editing: false, message: None, scroll: 0, initial_hash: init_hash, last_test_ok_hash: None });
 }
 
 fn focus_form_field(st: &mut ProvidersState, field_name: &str) {
@@ -369,12 +370,13 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 if let Some(form) = &mut st.form {
                     match key.code {
                         KeyCode::Esc => { if form.editing { form.editing = false; } else { st.focus_right = false; } }
-                        // Up/Down navigate between form groups. Treat [Save][Cancel] as one group.
+                        // Up/Down navigate between form groups. Treat [Test|Save|Cancel] as one group.
                         KeyCode::Up => {
                             let fields_len = form.fields.len();
-                            let save_idx = fields_len + 1;
-                            let cancel_idx = fields_len + 2;
-                            if form.selected == save_idx || form.selected == cancel_idx {
+                            let test_idx = fields_len + 1;
+                            let save_idx = fields_len + 2;
+                            let cancel_idx = fields_len + 3;
+                            if form.selected == test_idx || form.selected == save_idx || form.selected == cancel_idx {
                                 // Jump to last field (or Type if no fields)
                                 form.selected = if fields_len > 0 { fields_len } else { 0 };
                             } else if form.selected > 0 {
@@ -383,10 +385,11 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         }
                         KeyCode::Down => {
                             let fields_len = form.fields.len();
-                            let save_idx = fields_len + 1;
-                            let cancel_idx = fields_len + 2;
-                            let total = fields_len + 3;
-                            if form.selected == save_idx || form.selected == cancel_idx {
+                            let test_idx = fields_len + 1;
+                            let save_idx = fields_len + 2;
+                            let cancel_idx = fields_len + 3;
+                            let total = fields_len + 4;
+                            if form.selected == test_idx || form.selected == save_idx || form.selected == cancel_idx {
                                 // Already in the last group; stay within group on Down
                             } else if form.selected + 1 < total {
                                 form.selected += 1;
@@ -400,16 +403,45 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None });
                                 return;
                             }
-                            // If on Save/Cancel buttons, act; else toggle edit
-                            let save_idx = form.fields.len() + 1;
-                            let cancel_idx = form.fields.len() + 2;
-                            let total = form.fields.len() + 3;
-                            if form.selected == save_idx {
+                            // If on Test/Save/Cancel buttons, act; else toggle edit
+                            let test_idx = form.fields.len() + 1;
+                            let save_idx = form.fields.len() + 2;
+                            let cancel_idx = form.fields.len() + 3;
+                            let total = form.fields.len() + 4;
+                            if form.selected == test_idx {
+                                // Run test: use CLI where applicable
+                                let mut status = String::new();
+                                let mut ptype_cur = String::new();
+                                if st.selected < st.entries.len() {
+                                    let entry = &st.entries[st.selected];
+                                    ptype_cur = entry.ptype.clone();
+                                    match probe_provider(entry) {
+                                        Ok(msg) => { status = msg; },
+                                        Err(e) => { status = format!("Error: {}", e); },
+                                    }
+                                }
+                                let cur_hash = providers::compute_form_hash(&form.fields);
+                                let low = status.to_lowercase();
+                                if (ptype_cur == "lmstudio" || ptype_cur == "ollama" || ptype_cur == "openai") && !low.starts_with("error") && !low.contains("http ") {
+                                    form.last_test_ok_hash = Some(cur_hash);
+                                } else {
+                                    form.last_test_ok_hash = None;
+                                }
+                                form.message = Some(status);
+                            } else if form.selected == save_idx {
                                 let mut missing: Vec<String> = Vec::new();
                                 for ff in &form.fields { if ff.schema.required && ff.buffer.trim().is_empty() { missing.push(ff.schema.name.clone()); } }
                                 if !missing.is_empty() {
                                     form.message = Some(format!("Missing required: {}", missing.join(", ")));
                                 } else {
+                                    // Enforce: if dirty and not tested ok, prevent save
+                                    let cur_hash = providers::compute_form_hash(&form.fields);
+                                    let dirty = cur_hash != form.initial_hash;
+                                    let tested_ok = form.last_test_ok_hash.as_ref().map_or(false, |h| *h == cur_hash);
+                                    if dirty && !tested_ok {
+                                        form.message = Some("Run Test connection first".to_string());
+                                        return;
+                                    }
                                     if st.selected < st.entries.len() {
                                         if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
                                             for ff in &form.fields {
@@ -423,6 +455,9 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         }
                                     }
                                     form.message = Some("Saved".to_string());
+                                    // Update baseline hash after save
+                                    form.initial_hash = cur_hash;
+                                    form.last_test_ok_hash = Some(form.initial_hash.clone());
                                 }
                             } else if form.selected == cancel_idx { // Cancel
                                 form.editing = false;
@@ -431,7 +466,31 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 // If field has options, open dropdown, else toggle edit
                                 let fi = form.selected - 1; // map to fields index
                                 if let Some(ff) = form.fields.get(fi) {
-                                    if let Some(opts) = &ff.schema.options {
+                                    // Special-case: dynamic model list for lmstudio/ollama using CLI
+                                    let ptype = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
+                                    if ff.schema.name == "model" && (ptype == "lmstudio" || ptype == "ollama") {
+                                        // Use CLI discover-models
+                                        let host = form.fields.iter().find(|f| f.schema.name == "host").map(|f| f.buffer.clone()).unwrap_or_else(|| "localhost".to_string());
+                                        let port = form.fields.iter().find(|f| f.schema.name == "port").map(|f| f.buffer.clone()).unwrap_or_default();
+                                        let mut args = vec!["providers", "discover-models", "--type", &ptype, "--host", &host, "--json"];
+                                        if !port.is_empty() { args.push("--port"); args.push(&port); }
+                                        match util::run_cli_json(&args, Duration::from_secs(5)) {
+                                            Ok(v) => {
+                                                let mut items: Vec<String> = Vec::new();
+                                                if let Some(arr) = v.get("models").and_then(|x| x.as_array()) {
+                                                    for it in arr { if let Some(id) = it.get("id").and_then(|x| x.as_str()) { items.push(id.to_string()); } }
+                                                }
+                                                if items.is_empty() {
+                                                    form.message = Some(format!("No models discovered for {}", ptype));
+                                                } else {
+                                                    let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
+                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select model ({}):", ptype), target_field: Some(fi) });
+                                                    return;
+                                                }
+                                            }
+                                            Err(e) => { form.message = Some(format!("Discover failed: {}", e)); }
+                                        }
+                                    } else if let Some(opts) = &ff.schema.options {
                                         let mut items = opts.clone();
                                         let current_val = ff.buffer.clone();
                                         let mut sel = 0usize;
@@ -443,13 +502,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 form.editing = !form.editing;
                             }
                         }
-                        // Left/Right: within button group, switch Save <-> Cancel. In fields, move cursor when editing.
+                        // Left/Right: within button group, switch between Test/Save/Cancel. In fields, move cursor when editing.
                         KeyCode::Left => {
                             let fields_len = form.fields.len();
-                            let save_idx = fields_len + 1;
-                            let cancel_idx = fields_len + 2;
-                            if form.selected == cancel_idx {
-                                form.selected = save_idx;
+                            let test_idx = fields_len + 1;
+                            let save_idx = fields_len + 2;
+                            let cancel_idx = fields_len + 3;
+                            if form.selected > test_idx {
+                                form.selected -= 1;
                             } else if form.editing {
                                 if let Some(ff) = form.fields.get_mut(form.selected) {
                                     if ff.cursor > 0 { ff.cursor -= 1; }
@@ -458,10 +518,11 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         }
                         KeyCode::Right => {
                             let fields_len = form.fields.len();
-                            let save_idx = fields_len + 1;
-                            let cancel_idx = fields_len + 2;
-                            if form.selected == save_idx {
-                                form.selected = cancel_idx;
+                            let test_idx = fields_len + 1;
+                            let save_idx = fields_len + 2;
+                            let cancel_idx = fields_len + 3;
+                            if form.selected >= test_idx && form.selected < cancel_idx {
+                                form.selected += 1;
                             } else if form.editing {
                                 if let Some(ff) = form.fields.get_mut(form.selected) {
                                     if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; }
@@ -470,10 +531,10 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         }
                         KeyCode::Home => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = 0; } } }
                         KeyCode::End => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = ff.buffer.chars().count(); } } }
-                        KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; } } } }
-                        KeyCode::Delete => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { let len = ff.buffer.chars().count(); if ff.cursor < len { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; } } } }
-                        KeyCode::Tab => { let total = form.fields.len() + 3; form.selected = (form.selected + 1) % total; }
-                        KeyCode::BackTab => { let total = form.fields.len() + 3; form.selected = if form.selected == 0 { total - 1 } else { form.selected - 1 }; }
+                        KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; form.last_test_ok_hash = None; } } } }
+                        KeyCode::Delete => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { let len = ff.buffer.chars().count(); if ff.cursor < len { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; form.last_test_ok_hash = None; } } } }
+                        KeyCode::Tab => { let total = form.fields.len() + 4; form.selected = (form.selected + 1) % total; }
+                        KeyCode::BackTab => { let total = form.fields.len() + 4; form.selected = if form.selected == 0 { total - 1 } else { form.selected - 1 }; }
                         _ => {}
                     }
                     if let KeyCode::Char(c) = key.code {
@@ -484,6 +545,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 s.insert(idx, c);
                                 ff.buffer = s;
                                 ff.cursor += 1;
+                                form.last_test_ok_hash = None;
                             }
                         }
                     }
@@ -596,7 +658,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
         Page::Readme => "Up/Down scroll • PgUp/PgDn • h TOC • Tab switch TOC/Content • Enter jump • Esc back",
         Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
-        Page::Configure => "Tab/Shift+Tab switch • ↑/↓ field • Enter edit/Save/Cancel • ←/→/Home/End • Del/Backspace • Esc back",
+        Page::Configure => "Tab/Shift+Tab switch • ↑/↓ field • Enter edit/Test/Save/Cancel • ←/→/Home/End • Del/Backspace • Esc back",
         Page::Build => "g toggle target • Enter write • Esc back",
         Page::SelectDefault => "Up/Down select • Enter set default • Esc back",
         _ => "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
@@ -638,7 +700,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("?: help overlay • t: theme • a: animation"),
         Line::from("Diagnostics: e export • r refresh"),
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
-        Line::from("Configure: Tab/Shift+Tab • ↑/↓ field • Enter edit/Save/Cancel • ←/→/Home/End • Del/Backspace"),
+        Line::from("Configure: Tab/Shift+Tab • ↑/↓ field • Enter edit/Test/Save/Cancel • ←/→/Home/End • Del/Backspace"),
         Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC • Tab switch TOC/Content • Enter jump"),
         Line::from("Build: g toggle Project/Global • Enter write"),
         Line::from("Welcome: Up/Down + Enter to open a section"),

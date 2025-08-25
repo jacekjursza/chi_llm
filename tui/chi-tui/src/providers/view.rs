@@ -6,8 +6,8 @@ use ratatui::prelude::Frame;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
-use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use crate::util::run_cli_json;
+use super::state::compute_form_hash;
 use serde_json::Value;
 
 use crate::app::App;
@@ -113,11 +113,19 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                     f.render_widget(p, chunks[1 + visible.len()]);
                     let buttons_area = chunks[1 + visible.len() + 1];
                     let sel = form.selected;
-                    let save_idx = fields.len() + 1;
-                    let cancel_idx = fields.len() + 2;
-                    let save_style = if sel == save_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                    let test_idx = fields.len() + 1;
+                    let save_idx = fields.len() + 2;
+                    let cancel_idx = fields.len() + 3;
+                    // Compute save enabled: disabled if dirty and not tested ok for current values
+                    let cur_hash = crate::providers::compute_form_hash(&form.fields);
+                    let dirty = cur_hash != form.initial_hash;
+                    let tested_ok = form.last_test_ok_hash.as_ref().map_or(false, |h| *h == cur_hash);
+                    let save_enabled = !(dirty && !tested_ok);
+                    let test_style = if sel == test_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                    let mut save_style = if sel == save_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                    if !save_enabled { save_style = Style::default().fg(app.theme.secondary).add_modifier(Modifier::DIM); }
                     let cancel_style = if sel == cancel_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
-                    let btns = vec![Line::from(vec![Span::styled("[ Save ]  ", save_style), Span::styled("[ Cancel ]", cancel_style)])];
+                    let btns = vec![Line::from(vec![Span::styled("[ Test ]  ", test_style), Span::styled("[ Save ]  ", save_style), Span::styled("[ Cancel ]", cancel_style)])];
                     let p = Paragraph::new(btns).style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title)).alignment(ratatui::layout::Alignment::Left);
                     f.render_widget(p, buttons_area);
                 }
@@ -159,33 +167,33 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
 pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<String> {
     let ptype = entry.ptype.as_str();
     if ptype == "local" { return Ok("local: no network test".to_string()); }
-    let client = Client::builder().timeout(Duration::from_secs(3)).build()?;
     match ptype {
         "lmstudio" => {
             let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
             let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(1234);
-            let url = format!("http://{}:{}/v1/models", host, port);
-            let resp = client.get(&url).send()?; let status = resp.status();
-            if status.is_success() { let v: Value = resp.json()?; let count = v.get("data").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0); Ok(format!("lmstudio: {} models", count)) } else { Ok(format!("lmstudio: HTTP {}", status)) }
+            let args = ["providers", "discover-models", "--type", "lmstudio", "--host", host, "--port", &port.to_string(), "--json"];
+            let v = run_cli_json(&args, Duration::from_secs(5))?;
+            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+            Ok(format!("lmstudio: {} models", count))
         }
         "ollama" => {
             let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
             let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(11434);
-            let url = format!("http://{}:{}/api/tags", host, port);
-            let resp = client.get(&url).send()?; let status = resp.status();
-            if status.is_success() { let v: Value = resp.json()?; let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0); Ok(format!("ollama: {} tags", count)) } else { Ok(format!("ollama: HTTP {}", status)) }
+            let args = ["providers", "discover-models", "--type", "ollama", "--host", host, "--port", &port.to_string(), "--json"];
+            let v = run_cli_json(&args, Duration::from_secs(5))?;
+            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+            Ok(format!("ollama: {} models", count))
         }
         "openai" => {
             let base = entry.config.get("base_url").and_then(|v| v.as_str()).unwrap_or("https://api.openai.com");
-            let url = format!("{}/v1/models", base.trim_end_matches('/'));
-            let key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
-            let org = entry.config.get("org_id").and_then(|v| v.as_str());
-            if key.is_empty() { return Ok("openai: missing api_key".to_string()); }
-            let mut headers = HeaderMap::new(); let authv = format!("Bearer {}", key);
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&authv).unwrap_or(HeaderValue::from_static("")));
-            if let Some(o) = org { headers.insert("OpenAI-Organization", HeaderValue::from_str(o).unwrap_or(HeaderValue::from_static(""))); }
-            let resp = client.get(&url).headers(headers).send()?; let status = resp.status();
-            if status.is_success() { let v: Value = resp.json()?; let count = v.get("data").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0); Ok(format!("openai: {} models", count)) } else { Ok(format!("openai: HTTP {}", status)) }
+            let api_key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+            let org = entry.config.get("org_id").and_then(|v| v.as_str()).unwrap_or("");
+            if api_key.is_empty() { return Ok("openai: missing api_key".to_string()); }
+            let mut args: Vec<&str> = vec!["providers", "discover-models", "--type", "openai", "--base-url", base, "--api-key", api_key, "--json"];
+            if !org.is_empty() { args.push("--org-id"); args.push(org); }
+            let v = run_cli_json(&args, Duration::from_secs(5))?;
+            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+            Ok(format!("openai: {} models", count))
         }
         _ => Ok(format!("{}: no test implemented", ptype)),
     }
