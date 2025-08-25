@@ -44,7 +44,10 @@ impl ProvidersState {
     pub fn len_with_add(&self) -> usize { self.entries.len() + 1 }
     pub fn is_add_row(&self) -> bool { self.selected >= self.entries.len() }
     pub fn add_default(&mut self) {
-        let ptype = if let Some(idx) = self.schema_types.iter().position(|t| t == "local") {
+        // Prefer new zeroconfig local type when available, then legacy local, then first type
+        let ptype = if let Some(idx) = self.schema_types.iter().position(|t| t == "local-zeroconfig") {
+            self.schema_types.get(idx).cloned().unwrap_or_else(|| "local-zeroconfig".to_string())
+        } else if let Some(idx) = self.schema_types.iter().position(|t| t == "local") {
             self.schema_types.get(idx).cloned().unwrap_or_else(|| "local".to_string())
         } else {
             self.schema_types.get(0).cloned().unwrap_or_else(|| "local".to_string())
@@ -182,4 +185,3 @@ pub struct DropdownState {
     pub selected: usize,
     pub title: String,
 }
-

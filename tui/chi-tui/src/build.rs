@@ -150,9 +150,14 @@ pub fn write_active_config(target: BuildTarget) -> Result<String> {
     if ptype.is_empty() {
         return Err(anyhow!("default provider type missing"));
     }
+    // Map UI-specific local variants to canonical type for config
+    let ptype_out = match ptype.as_str() {
+        "local-zeroconfig" | "local-custom" => "local".to_string(),
+        other => other.to_string(),
+    };
     let mut out = serde_json::Map::new();
     let mut pmap = serde_json::Map::new();
-    pmap.insert("type".to_string(), Value::String(ptype));
+    pmap.insert("type".to_string(), Value::String(ptype_out));
     for (k, v) in cfg {
         pmap.insert(k, v);
     }
@@ -175,4 +180,3 @@ pub fn write_active_config(target: BuildTarget) -> Result<String> {
     };
     Ok(written)
 }
-

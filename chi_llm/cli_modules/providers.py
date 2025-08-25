@@ -20,7 +20,17 @@ except Exception:  # pragma: no cover - optional
     MODELS = {}  # type: ignore
 
 SUPPORTED = [
-    {"type": "local", "implemented": True, "notes": "Default llama.cpp"},
+    {"type": "local", "implemented": True, "notes": "Default llama.cpp (legacy alias)"},
+    {
+        "type": "local-zeroconfig",
+        "implemented": True,
+        "notes": "Curated models (one-pick)",
+    },
+    {
+        "type": "local-custom",
+        "implemented": True,
+        "notes": "Custom GGUF path and tuning",
+    },
     {"type": "lmstudio", "implemented": True, "notes": "Local UI/server"},
     {"type": "ollama", "implemented": True, "notes": "Local server"},
     {"type": "openai", "implemented": True, "notes": "API key required"},
@@ -47,6 +57,50 @@ PROVIDER_SCHEMAS = {
                 "type": "string",
                 "required": False,
                 "help": "Absolute path to GGUF model file",
+            },
+            {
+                "name": "context_window",
+                "type": "int",
+                "required": False,
+                "help": "Override context window (n_ctx)",
+            },
+            {
+                "name": "n_gpu_layers",
+                "type": "int",
+                "required": False,
+                "help": "Layers offloaded to GPU",
+            },
+            {
+                "name": "output_tokens",
+                "type": "int",
+                "required": False,
+                "help": "Default max output tokens",
+            },
+        ]
+    },
+    "local-zeroconfig": {
+        "fields": [
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Recommended model ID from curated list",
+            }
+        ]
+    },
+    "local-custom": {
+        "fields": [
+            {
+                "name": "model_path",
+                "type": "string",
+                "required": False,
+                "help": "Absolute path to GGUF model file",
+            },
+            {
+                "name": "model",
+                "type": "string",
+                "required": False,
+                "help": "Model ID (optional; overrides default)",
             },
             {
                 "name": "context_window",
@@ -222,11 +276,28 @@ def cmd_providers(args):
             if not ptype:
                 continue
             schema = PROVIDER_SCHEMAS.get(ptype, {"fields": []})
+            fields = list(schema.get("fields", []))
+            # Augment zeroconfig with recommended options when available
+            if ptype == "local-zeroconfig":
+                try:
+                    # Provide a small curated list for dropdowns (ids only)
+                    rec_ids = []
+                    for mid, mi in MODELS.items():  # type: ignore
+                        tags = getattr(mi, "tags", []) or []
+                        if "recommended" in tags or "default" in tags:
+                            rec_ids.append(mid)
+                    if rec_ids:
+                        for f in fields:
+                            if f.get("name") == "model":
+                                f["options"] = rec_ids  # UI can use as enum source
+                                break
+                except Exception:
+                    pass
             out["providers"].append(
                 {
                     "type": ptype,
                     "implemented": bool(p.get("implemented")),
-                    "fields": schema.get("fields", []),
+                    "fields": fields,
                 }
             )
         if getattr(args, "json", False):
