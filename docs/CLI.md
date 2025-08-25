@@ -552,3 +552,31 @@ chi-llm providers discover-models --type openai \
 Notes:
 - LM Studio and Ollama use their local HTTP endpoints; OpenAI calls `/v1/models` with your API key.
 - Designed for UIs: the `models` array contains objects with at least `id`.
+
+#### Test provider connectivity (normalized JSON)
+
+Quickly probe a provider endpoint and get a normalized result payload suitable for UIs and scripts.
+
+```bash
+# Local providers (no network):
+chi-llm providers test --type local --json | jq
+
+# LM Studio / Ollama (host/port customizable):
+chi-llm providers test --type lmstudio --host 127.0.0.1 --port 1234 --json | jq
+chi-llm providers test --type ollama   --host 127.0.0.1 --port 11434 --json | jq
+
+# OpenAI / Anthropic:
+chi-llm providers test --type openai \
+  --api-key "$OPENAI_API_KEY" \
+  --base-url https://api.openai.com --json | jq
+
+chi-llm providers test --type anthropic \
+  --api-key "$ANTHROPIC_API_KEY" \
+  --base-url https://api.anthropic.com --json | jq
+```
+
+Output fields:
+- `ok`: boolean
+- `status`: HTTP status code (when applicable)
+- `latency_ms`: integer latency in milliseconds (when measured)
+- `message`: concise summary for end users

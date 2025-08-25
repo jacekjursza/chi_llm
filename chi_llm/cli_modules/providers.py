@@ -523,6 +523,43 @@ def register(subparsers: _SubParsersAction):
     )
     disc.set_defaults(func=cmd_discover_models)
 
+    # Probe/test provider connectivity
+    testp = providers_sub.add_parser(
+        "test", help="Test provider connectivity (HTTP/API)"
+    )
+    testp.add_argument("--type", dest="ptype", required=True, help="Provider type")
+    testp.add_argument("--host", default=None, help="Provider host")
+    testp.add_argument("--port", default=None, help="Provider port (int)")
+    testp.add_argument("--base-url", dest="base_url", default=None, help="API base URL")
+    testp.add_argument(
+        "--api-key", dest="api_key", default=None, help="API key (if required)"
+    )
+    testp.add_argument(
+        "--org-id", dest="org_id", default=None, help="Organization (OpenAI)"
+    )
+    testp.add_argument(
+        "--model-path",
+        dest="model_path",
+        default=None,
+        help="Model path (local-custom)",
+    )
+    testp.add_argument(
+        "--model", dest="model", default=None, help="Model id (when required)"
+    )
+    testp.add_argument(
+        "--timeout", dest="timeout", default="5.0", help="Timeout seconds"
+    )
+    testp.add_argument(
+        "--e2e", action="store_true", help="Run end-to-end generate('Hello!') test"
+    )
+    testp.add_argument(
+        "--prompt", dest="prompt", default=None, help="Custom test prompt for --e2e"
+    )
+    testp.add_argument("--json", action="store_true", help="Output JSON")
+    from .providers_test import cmd_test_provider as _cmd_test_provider  # type: ignore
+
+    testp.set_defaults(func=_cmd_test_provider)
+
 
 def cmd_discover_models(args):
     # Forward to split module to keep this file within size limits

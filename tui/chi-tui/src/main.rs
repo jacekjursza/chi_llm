@@ -474,9 +474,10 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         form.message = Some("Run Test connection first".to_string());
                                         return;
                                     }
+                                    // Apply field values to selected entry config
                                     if st.selected < st.entries.len() {
                                         if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
-                                            for ff in &form.fields {
+                                            for ff in &form.fields.clone() {
                                                 let key2 = ff.schema.name.clone();
                                                 if ff.schema.ftype == "int" {
                                                     if let Ok(n) = ff.buffer.parse::<i64>() { obj.insert(key2, Value::Number(n.into())); } else { obj.insert(key2, Value::String(ff.buffer.clone())); }
@@ -486,10 +487,18 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                             }
                                         }
                                     }
-                                    form.message = Some("Saved".to_string());
-                                    // Update baseline hash after save
-                                    form.initial_hash = cur_hash;
-                                    form.last_test_ok_hash = Some(form.initial_hash.clone());
+                                    // Drop form borrow before saving state
+                                    std::mem::drop(form);
+                                    let save_res = st.save();
+                                    // Re-borrow to set message and hashes
+                                    if let Some(form2) = &mut st.form {
+                                        match save_res {
+                                            Ok(_) => { form2.message = Some("Saved".to_string()); }
+                                            Err(e) => { form2.message = Some(format!("Save failed: {}", e)); }
+                                        }
+                                        form2.initial_hash = cur_hash.clone();
+                                        form2.last_test_ok_hash = Some(cur_hash);
+                                    }
                                 }
                             } else if form.selected == cancel_idx { // Cancel
                                 form.editing = false;

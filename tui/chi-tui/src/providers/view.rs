@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use ratatui::layout::{Rect, Layout, Direction, Constraint};
 use ratatui::prelude::Frame;
 use ratatui::style::{Modifier, Style};
@@ -190,52 +190,57 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
 
 pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<String> {
     let ptype = entry.ptype.as_str();
-    if ptype == "local" { return Ok("local: no network test".to_string()); }
+    // Build args for unified CLI probe
+    let mut args: Vec<String> = vec!["providers".into(), "test".into(), "--type".into(), ptype.into(), "--e2e".into(), "--json".into()];
     match ptype {
+        "local" => { /* no extra args */ }
         "local-custom" => {
-            let path = entry.config.get("model_path").and_then(|v| v.as_str()).unwrap_or("");
-            if path.is_empty() { return Ok("local-custom: missing model_path".to_string()); }
-            if std::path::Path::new(path).exists() {
-                Ok("local-custom: file found".to_string())
-            } else {
-                Ok("local-custom: file not found".to_string())
+            if let Some(path) = entry.config.get("model_path").and_then(|v| v.as_str()) {
+                args.push("--model-path".into()); args.push(path.into());
             }
         }
-        "lmstudio" => {
-            let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
-            let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(1234);
-            let args = ["providers", "discover-models", "--type", "lmstudio", "--host", host, "--port", &port.to_string(), "--json"];
-            let v = run_cli_json(&args, Duration::from_secs(5))?;
-            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
-            Ok(format!("lmstudio: {} models", count))
-        }
-        "ollama" => {
-            let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
-            let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(11434);
-            let args = ["providers", "discover-models", "--type", "ollama", "--host", host, "--port", &port.to_string(), "--json"];
-            let v = run_cli_json(&args, Duration::from_secs(5))?;
-            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
-            Ok(format!("ollama: {} models", count))
-        }
-        "anthropic" => {
-            let api_key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
-            if api_key.is_empty() { return Ok("anthropic: missing api_key".to_string()); }
-            let args = ["providers", "discover-models", "--type", "anthropic", "--api-key", api_key, "--json"];
-            let v = run_cli_json(&args, Duration::from_secs(5))?;
-            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
-            Ok(format!("anthropic: {} models", count))
+        "lmstudio" | "ollama" => {
+            if let Some(host) = entry.config.get("host").and_then(|v| v.as_str()) {
+                args.push("--host".into()); args.push(host.into());
+            }
+            if let Some(port) = entry.config.get("port").and_then(|v| v.as_u64()) {
+                args.push("--port".into()); args.push(port.to_string());
+            }
+            if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                args.push("--model".into()); args.push(model.into());
+            }
         }
         "openai" => {
-            let base = entry.config.get("base_url").and_then(|v| v.as_str()).unwrap_or("https://api.openai.com");
-            let api_key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
-            let org = entry.config.get("org_id").and_then(|v| v.as_str()).unwrap_or("");
-            if api_key.is_empty() { return Ok("openai: missing api_key".to_string()); }
-            let mut args: Vec<&str> = vec!["providers", "discover-models", "--type", "openai", "--base-url", base, "--api-key", api_key, "--json"];
-            if !org.is_empty() { args.push("--org-id"); args.push(org); }
-            let v = run_cli_json(&args, Duration::from_secs(5))?;
-            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
-            Ok(format!("openai: {} models", count))
+            if let Some(base) = entry.config.get("base_url").and_then(|v| v.as_str()) {
+                args.push("--base-url".into()); args.push(base.into());
+            }
+            if let Some(key) = entry.config.get("api_key").and_then(|v| v.as_str()) {
+                args.push("--api-key".into()); args.push(key.into());
+            }
+            if let Some(org) = entry.config.get("org_id").and_then(|v| v.as_str()) {
+                if !org.is_empty() { args.push("--org-id".into()); args.push(org.into()); }
+            }
+            if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                args.push("--model".into()); args.push(model.into());
+            }
         }
-        _ => Ok(format!("{}: no test implemented", ptype)),
+        "anthropic" => {
+            if let Some(base) = entry.config.get("base_url").and_then(|v| v.as_str()) {
+                args.push("--base-url".into()); args.push(base.into());
+            }
+            if let Some(key) = entry.config.get("api_key").and_then(|v| v.as_str()) {
+                args.push("--api-key".into()); args.push(key.into());
+            }
+            if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                args.push("--model".into()); args.push(model.into());
+            }
+        }
+        _ => {}
     }
+    // Convert to &str slice for run
+    let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let v = run_cli_json(&args_ref, Duration::from_secs(5))?;
+    let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+    let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    if ok { Ok(msg) } else { Err(anyhow!(msg)) }
 }

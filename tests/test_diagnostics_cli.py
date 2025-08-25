@@ -26,7 +26,9 @@ def test_diagnostics_json_basic(capsys, tmp_path, monkeypatch):
 
         with patch.object(diag, "ModelManager", return_value=FakeMgr()):
             # Stub network check
-            with patch.object(diag, "_check_network", return_value={"hf": True, "ok": True}):
+            with patch.object(
+                diag, "_check_network", return_value={"hf": True, "ok": True}
+            ):
                 args = SimpleNamespace(json=True)
                 diag.cmd_diagnostics(args)
 
@@ -39,4 +41,3 @@ def test_diagnostics_json_basic(capsys, tmp_path, monkeypatch):
     # available_ram 1.0GB vs recommended >=2.0GB => fits False
     assert data["model"]["fits"] is False
     assert data["network"]["ok"] is True
-
