@@ -40,8 +40,10 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
     } else {
         items.push(ListItem::new("Loading providers..."));
     }
+    // Highlight left pane when it has focus (focus_right == false)
+    let left_border = if let Some(st) = &app.providers { if !st.focus_right { app.theme.selected } else { app.theme.frame } } else { app.theme.frame };
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title("Configure Providers"))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(left_border)).title("Configure Providers"))
         .highlight_style(Style::default().fg(app.theme.selected));
     f.render_widget(list, cols[0]);
 
@@ -129,6 +131,13 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
         f.render_widget(p, right);
     }
 
+    // Draw an outer border around the right pane to indicate active focus
+    if let Some(st) = &app.providers {
+        let right_border = if st.focus_right { app.theme.selected } else { app.theme.frame };
+        let outer = Block::default().borders(Borders::ALL).border_style(Style::default().fg(right_border));
+        f.render_widget(outer, right);
+    }
+
     // Overlay dropdown
     if let Some(st) = &app.providers {
         if let Some(dd) = &st.dropdown {
@@ -181,4 +190,3 @@ pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<Stri
         _ => Ok(format!("{}: no test implemented", ptype)),
     }
 }
-

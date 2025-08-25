@@ -20,6 +20,8 @@ pub struct ReadmeState {
     pub toc: Vec<TocEntry>,
     pub show_toc: bool,
     pub scroll: usize,
+    pub focus_toc: bool,
+    pub toc_selected: usize,
 }
 
 impl ReadmeState {
@@ -63,6 +65,8 @@ pub fn load_readme() -> ReadmeState {
         toc,
         show_toc: false,
         scroll: 0,
+        focus_toc: false,
+        toc_selected: 0,
     }
 }
 
@@ -84,18 +88,22 @@ pub fn draw_readme(f: &mut Frame, area: Rect, app: &App) {
 
     if show_toc {
         let mut toc_items: Vec<ListItem> = Vec::new();
-        for e in &rm.toc {
+        for (i, e) in rm.toc.iter().enumerate() {
             let indent = match e.level {
                 1 => "",
                 2 => "  ",
                 _ => "    ",
             };
-            toc_items.push(ListItem::new(format!("{}- {}", indent, e.title)));
+            let style = if rm.focus_toc && i == rm.toc_selected {
+                Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD)
+            } else { Style::default().fg(app.theme.fg) };
+            toc_items.push(ListItem::new(Line::from(Span::styled(format!("{}- {}", indent, e.title), style))));
         }
+        let left_border = if rm.focus_toc { app.theme.selected } else { app.theme.frame };
         let list = List::new(toc_items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.frame))
+                .border_style(Style::default().fg(left_border))
                 .title("TOC"),
         );
         f.render_widget(list, chunks[0]);
@@ -129,12 +137,13 @@ pub fn draw_readme(f: &mut Frame, area: Rect, app: &App) {
             vlines.push(Line::from(raw.as_str()));
         }
     }
+    let right_border = if show_toc && !rm.focus_toc { app.theme.selected } else { app.theme.frame };
     let p = Paragraph::new(vlines)
         .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.frame))
+                .border_style(Style::default().fg(right_border))
                 .title("README"),
         )
         .alignment(Alignment::Left)
@@ -143,4 +152,3 @@ pub fn draw_readme(f: &mut Frame, area: Rect, app: &App) {
 
     // Note: caller updates app.readme via key handler (holds &mut App there)
 }
-

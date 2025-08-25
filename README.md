@@ -574,6 +574,8 @@ Shortcuts:
 - `↑/↓` or `k/j` — Navigate lists
 - `enter` — Select / Confirm
 - `Tab`/`Shift+Tab` — Switch between list and form in Providers
+- `←/→` — Switch between buttons in form groups (e.g., Save/Cancel)
+- README: with TOC visible (`h`), `Tab` switches TOC/Content, `Enter` jumps
 - `F` — Providers: open dynamic form (schema‑driven)
 - `b` — Back to Welcome
 - `e` — Export diagnostics to `chi_llm_diagnostics.json`

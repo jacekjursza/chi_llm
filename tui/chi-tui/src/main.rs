@@ -203,12 +203,42 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             app.readme = Some(load_readme());
         }
         if let Some(rm) = &mut app.readme {
+            // When TOC visible, allow Tab to switch focus and Up/Down to navigate TOC
             match key.code {
-                KeyCode::Up => rm.scroll_up(1),
-                KeyCode::Down => rm.scroll_down(1),
+                KeyCode::Char('h') | KeyCode::Char('H') => {
+                    rm.show_toc = !rm.show_toc;
+                    if !rm.show_toc { rm.focus_toc = false; }
+                }
+                KeyCode::Tab => {
+                    if rm.show_toc { rm.focus_toc = !rm.focus_toc; }
+                }
+                KeyCode::BackTab => {
+                    if rm.show_toc { rm.focus_toc = !rm.focus_toc; }
+                }
+                KeyCode::Up => {
+                    if rm.show_toc && rm.focus_toc {
+                        if rm.toc_selected > 0 { rm.toc_selected -= 1; }
+                    } else {
+                        rm.scroll_up(1);
+                    }
+                }
+                KeyCode::Down => {
+                    if rm.show_toc && rm.focus_toc {
+                        if rm.toc_selected + 1 < rm.toc.len() { rm.toc_selected += 1; }
+                    } else {
+                        rm.scroll_down(1);
+                    }
+                }
                 KeyCode::PageUp => rm.scroll_up(8),
                 KeyCode::PageDown => rm.scroll_down(8),
-                KeyCode::Char('h') | KeyCode::Char('H') => rm.show_toc = !rm.show_toc,
+                KeyCode::Enter => {
+                    if rm.show_toc && rm.focus_toc {
+                        if let Some(entry) = rm.toc.get(rm.toc_selected) {
+                            rm.scroll = entry.line;
+                            rm.focus_toc = false; // jump to content focus
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -311,13 +341,26 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 }
                 return;
             }
-            // Pane focus shortcuts
+            // Pane focus shortcuts: Tab cycles focus between panes; Shift+Tab cycles backward
             match key.code {
                 KeyCode::Tab => {
-                    if st.is_add_row() { st.add_default(); }
-                    if st.selected < st.entries.len() { ensure_form_for_selected(st); st.focus_right = true; }
+                    if !st.focus_right {
+                        if st.is_add_row() { st.add_default(); }
+                        if st.selected < st.entries.len() { ensure_form_for_selected(st); }
+                        st.focus_right = true;
+                    } else {
+                        st.focus_right = false;
+                    }
                 },
-                KeyCode::BackTab => { st.focus_right = false; },
+                KeyCode::BackTab => {
+                    if st.focus_right {
+                        st.focus_right = false;
+                    } else {
+                        if st.is_add_row() { st.add_default(); }
+                        if st.selected < st.entries.len() { ensure_form_for_selected(st); }
+                        st.focus_right = true;
+                    }
+                },
                 _ => {}
             }
             if st.focus_right {
@@ -326,8 +369,29 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 if let Some(form) = &mut st.form {
                     match key.code {
                         KeyCode::Esc => { if form.editing { form.editing = false; } else { st.focus_right = false; } }
-                        KeyCode::Up => { if form.selected > 0 { form.selected -= 1; } }
-                        KeyCode::Down => { let total = form.fields.len() + 3; if form.selected + 1 < total { form.selected += 1; } }
+                        // Up/Down navigate between form groups. Treat [Save][Cancel] as one group.
+                        KeyCode::Up => {
+                            let fields_len = form.fields.len();
+                            let save_idx = fields_len + 1;
+                            let cancel_idx = fields_len + 2;
+                            if form.selected == save_idx || form.selected == cancel_idx {
+                                // Jump to last field (or Type if no fields)
+                                form.selected = if fields_len > 0 { fields_len } else { 0 };
+                            } else if form.selected > 0 {
+                                form.selected -= 1;
+                            }
+                        }
+                        KeyCode::Down => {
+                            let fields_len = form.fields.len();
+                            let save_idx = fields_len + 1;
+                            let cancel_idx = fields_len + 2;
+                            let total = fields_len + 3;
+                            if form.selected == save_idx || form.selected == cancel_idx {
+                                // Already in the last group; stay within group on Down
+                            } else if form.selected + 1 < total {
+                                form.selected += 1;
+                            }
+                        }
                         KeyCode::Enter => {
                             // If on Type row: open dropdown
                             if form.selected == 0 {
@@ -379,8 +443,31 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 form.editing = !form.editing;
                             }
                         }
-                        KeyCode::Left => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { ff.cursor -= 1; } } } }
-                        KeyCode::Right => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; } } } }
+                        // Left/Right: within button group, switch Save <-> Cancel. In fields, move cursor when editing.
+                        KeyCode::Left => {
+                            let fields_len = form.fields.len();
+                            let save_idx = fields_len + 1;
+                            let cancel_idx = fields_len + 2;
+                            if form.selected == cancel_idx {
+                                form.selected = save_idx;
+                            } else if form.editing {
+                                if let Some(ff) = form.fields.get_mut(form.selected) {
+                                    if ff.cursor > 0 { ff.cursor -= 1; }
+                                }
+                            }
+                        }
+                        KeyCode::Right => {
+                            let fields_len = form.fields.len();
+                            let save_idx = fields_len + 1;
+                            let cancel_idx = fields_len + 2;
+                            if form.selected == save_idx {
+                                form.selected = cancel_idx;
+                            } else if form.editing {
+                                if let Some(ff) = form.fields.get_mut(form.selected) {
+                                    if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; }
+                                }
+                            }
+                        }
                         KeyCode::Home => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = 0; } } }
                         KeyCode::End => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = ff.buffer.chars().count(); } } }
                         KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; } } } }
@@ -507,7 +594,7 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let msg_text = match app.page {
         Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
-        Page::Readme => "Up/Down scroll • PgUp/PgDn faster • h TOC • Esc back",
+        Page::Readme => "Up/Down scroll • PgUp/PgDn • h TOC • Tab switch TOC/Content • Enter jump • Esc back",
         Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
         Page::Configure => "Tab/Shift+Tab switch • ↑/↓ field • Enter edit/Save/Cancel • ←/→/Home/End • Del/Backspace • Esc back",
         Page::Build => "g toggle target • Enter write • Esc back",
@@ -552,7 +639,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("Diagnostics: e export • r refresh"),
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
         Line::from("Configure: Tab/Shift+Tab • ↑/↓ field • Enter edit/Save/Cancel • ←/→/Home/End • Del/Backspace"),
-        Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC"),
+        Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC • Tab switch TOC/Content • Enter jump"),
         Line::from("Build: g toggle Project/Global • Enter write"),
         Line::from("Welcome: Up/Down + Enter to open a section"),
         Line::from("—").style(Style::default().fg(app.theme.frame)),
