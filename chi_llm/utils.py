@@ -38,6 +38,9 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         "cache_dir": str(Path.home() / ".cache" / "chi_llm"),
         "verbose": False,
         "provider": {},  # optional provider configuration
+        # List of directories to recursively search for local GGUF models
+        # when discovering models for the 'local' provider.
+        "auto_discovery_gguf_paths": [],
     }
 
     # 2) Project file in CWD
@@ -102,6 +105,13 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     if provider_model_path:
         config.setdefault("provider", {})
         config["provider"]["model_path"] = provider_model_path
+
+    # Optional: define GGUF search roots via env (pathsep-separated)
+    gguf_paths_env = os.environ.get("CHI_LLM_GGUF_PATHS")
+    if gguf_paths_env:
+        paths = [p.strip() for p in gguf_paths_env.split(os.pathsep) if p.strip()]
+        if paths:
+            config["auto_discovery_gguf_paths"] = paths
 
     # Optional local-tuning overrides for the 'local' provider
     provider_ctx = os.environ.get("CHI_LLM_PROVIDER_CONTEXT_WINDOW") or os.environ.get(

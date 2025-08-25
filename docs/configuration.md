@@ -190,6 +190,36 @@ llm = MicroLLM(
 llm = MicroLLM(model_path="/path/to/model.gguf")
 ```
 
+### Local GGUF auto-discovery
+
+Key: `auto_discovery_gguf_paths` (array of strings)
+
+When using the `local`/`local-custom` provider types, chi_llm can recursively scan your filesystem for `.gguf` model files and surface them in model discovery (CLI) and helper APIs. Define one or more root directories to search:
+
+Example (`.chi_llm.json`):
+
+```
+{
+  "auto_discovery_gguf_paths": [
+    "/home/user/models",
+    "~/Downloads/gguf"
+  ]
+}
+```
+
+Notes:
+- Search is recursive (subdirectories included).
+- Paths may include `~` and environment variables; they are expanded at runtime.
+- You can also set via environment variable: `CHI_LLM_GGUF_PATHS` with paths separated by your OS path separator (e.g., `:` on Linux/macOS, `;` on Windows).
+
+CLI usage:
+
+```
+chi-llm providers discover-models --type local --json
+```
+
+The output will include curated catalog model IDs (from chi_llm's registry) and any discovered `.gguf` file paths.
+
 ## Configuration Examples
 
 ### Example 1: Development vs Production

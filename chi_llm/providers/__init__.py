@@ -9,6 +9,10 @@ exists to unblock configuration schema and selection logic.
 """
 
 from .base import Provider  # re-export for convenience
+from pathlib import Path
+from typing import List
+import os
+from chi_llm.utils import load_config
 
 
 def discover_models_for_provider(ptype: str, **kwargs):
@@ -18,13 +22,35 @@ def discover_models_for_provider(ptype: str, **kwargs):
     """
     p = (ptype or "").strip().lower()
     if p in ("local", "local-custom"):
-        # Return curated catalog model ids
+        # Return curated catalog model ids + discovered GGUF file paths
+        ids: List[str] = []
         try:
             from chi_llm.models import MODELS
 
-            return list(MODELS.keys())
+            ids.extend(list(MODELS.keys()))
         except Exception:
-            return []
+            pass
+        try:
+            cfg = load_config()
+            roots = cfg.get("auto_discovery_gguf_paths") or []
+            if isinstance(roots, str):
+                roots = [roots]
+            for root in roots:
+                try:
+                    rp = Path(os.path.expanduser(str(root))).resolve()
+                    if rp.exists() and rp.is_dir():
+                        for pth in rp.rglob("*.gguf"):
+                            try:
+                                s = str(pth)
+                                if s not in ids:
+                                    ids.append(s)
+                            except Exception:
+                                continue
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return ids
     if p in ("local-zeroconfig", "local-no-config"):
         # Return recommended/default subset for zero-config
         try:
