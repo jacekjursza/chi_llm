@@ -190,6 +190,18 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> R
 fn handle_key(app: &mut App, key: KeyEvent) {
     // Ctrl+C / q always quits
     if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) { app.should_quit = true; return; }
+    // Intercept modal popups before global handling
+    if app.page == Page::Configure {
+        if let Some(st) = &mut app.providers {
+            if st.show_test_popup {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('l') | KeyCode::Char('L') => { st.show_test_popup = false; }
+                    _ => {}
+                }
+                return;
+            }
+        }
+    }
     match key.code {
         KeyCode::Char('q') => { app.should_quit = true; }
         KeyCode::Char('?') => { app.show_help = !app.show_help; }
