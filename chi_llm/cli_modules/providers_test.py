@@ -17,6 +17,7 @@ from urllib.parse import urljoin
 import subprocess
 import sys
 import tempfile
+import threading
 
 
 def _print_json(obj: Dict[str, Any]) -> None:
@@ -208,7 +209,9 @@ def _e2e_generate_with_temp_config(
 ) -> Dict[str, Any]:
     """Run `chi-llm generate` with CHI_LLM_CONFIG pointing to a temp file.
 
-    Returns normalized result dict.
+    Streams child stdout/stderr to this process' stderr for live logs,
+    and returns a normalized result dict. Stdout remains reserved for the
+    JSON result printed by this command.
     """
     # Write temp config file for both utils.load_config and ModelManager
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
@@ -222,17 +225,66 @@ def _e2e_generate_with_temp_config(
     env["CHI_LLM_CONFIG"] = temp_path
     cmd = [sys.executable, "-m", "chi_llm.cli_main", "generate", prompt]
     t0 = time.monotonic()
+
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             env=env,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
+
+        out_lines: list[str] = []
+        err_lines: list[str] = []
+
+        def _pump(pipe, buf):
+            try:
+                if pipe is None:
+                    return
+                for b in iter(pipe.readline, b""):
+                    try:
+                        s = b.decode("utf-8", errors="ignore")
+                    except Exception:
+                        s = str(b)
+                    buf.append(s)
+                    try:
+                        # Forward child output to stderr for live progress
+                        sys.stderr.write(s)
+                        sys.stderr.flush()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        th_out = threading.Thread(
+            target=_pump, args=(proc.stdout, out_lines), daemon=True
+        )
+        th_err = threading.Thread(
+            target=_pump, args=(proc.stderr, err_lines), daemon=True
+        )
+        th_out.start()
+        th_err.start()
+
+        # Poll for completion with timeout
+        while True:
+            rc = proc.poll()
+            if rc is not None:
+                break
+            if (time.monotonic() - t0) > timeout:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                dt = int((time.monotonic() - t0) * 1000)
+                return _result(False, None, dt, "e2e timeout")
+            time.sleep(0.05)
+
+        th_out.join(timeout=0.2)
+        th_err.join(timeout=0.2)
         dt = int((time.monotonic() - t0) * 1000)
+
         if proc.returncode == 0:
-            out_txt = (proc.stdout or "").strip()
+            out_txt = "".join(out_lines).strip()
             msg = (
                 (out_txt[:120] + ("…" if len(out_txt) > 120 else ""))
                 if out_txt
@@ -240,11 +292,12 @@ def _e2e_generate_with_temp_config(
             )
             return _result(True, 0, dt, f"e2e ok: {msg}")
         else:
-            err = (proc.stderr or proc.stdout or "").strip()[:200]
+            err_txt = "".join(err_lines).strip() or "".join(out_lines).strip()
+            err = err_txt[:200]
             return _result(False, proc.returncode, dt, f"e2e fail: {err}")
-    except subprocess.TimeoutExpired:
+    except Exception:
         dt = int((time.monotonic() - t0) * 1000)
-        return _result(False, None, dt, "e2e timeout")
+        return _result(False, None, dt, "e2e error")
 
 
 def cmd_test_provider(args):
