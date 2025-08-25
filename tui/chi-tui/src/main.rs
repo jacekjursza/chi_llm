@@ -28,9 +28,42 @@ use app::{App, Page, WELCOME_ITEMS};
 use build::{BuildState, BuildTarget, draw_build_config, write_active_config};
 use diagnostics::{draw_diagnostics, export_diagnostics, fetch_diagnostics};
 use models::{fetch_models, draw_model_browser};
-use providers::{ProvidersState, EditState, FormState, load_providers_state, draw_providers_catalog, probe_provider, load_providers_scratch, save_default_provider, draw_select_default};
+use providers::{ProvidersState, FormState, DropdownState, load_providers_state, draw_providers_catalog, probe_provider, load_providers_scratch, save_default_provider, draw_select_default};
 use readme::{load_readme, draw_readme};
 use util::{ensure_chi_llm, centered_rect, neon_gradient_line};
+
+fn ensure_form_for_selected(st: &mut ProvidersState) {
+    if st.selected >= st.entries.len() { st.form = None; return; }
+    let entry = &st.entries[st.selected];
+    let mut ff = Vec::new();
+    if let Some(sfields) = st.schema_map.get(&entry.ptype) {
+        for sc in sfields.iter() {
+            let mut value = String::new();
+            if let Some(cfg) = entry.config.as_object() {
+                if let Some(v) = cfg.get(&sc.name) {
+                    value = match v { Value::String(s) => s.clone(), other => other.to_string() };
+                }
+            }
+            if value.is_empty() { if let Some(d) = &sc.default { value = d.clone(); } }
+            ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone() }, buffer: value, cursor: 0 });
+        }
+    }
+    st.form = Some(FormState { fields: ff, selected: 0, editing: false, message: None, scroll: 0 });
+}
+
+fn focus_form_field(st: &mut ProvidersState, field_name: &str) {
+    if st.selected >= st.entries.len() { return; }
+    ensure_form_for_selected(st);
+    if let Some(form) = &mut st.form {
+        if let Some(idx) = form.fields.iter().position(|f| f.schema.name == field_name) {
+            form.selected = idx;
+            form.editing = true;
+            st.focus_right = true;
+        } else {
+            st.focus_right = true;
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "chi-tui")] 
@@ -239,111 +272,128 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             });
         }
         if let Some(st) = &mut app.providers {
-            // Editing mode
-            if let Some(edit) = &mut st.edit {
+            // Dropdown handling (e.g., type selector)
+            if let Some(dd) = &mut st.dropdown {
                 match key.code {
-                    KeyCode::Esc => { st.edit = None; }
+                    KeyCode::Up => { if dd.selected > 0 { dd.selected -= 1; } }
+                    KeyCode::Down => { if dd.selected + 1 < dd.items.len() { dd.selected += 1; } }
                     KeyCode::Enter => {
-                        if st.selected < st.entries.len() {
-                            let entry = &mut st.entries[st.selected];
-                            let val = match edit.field.as_str() {
-                                "port" => edit.buffer.parse::<u16>().map(|n| Value::Number(n.into())).unwrap_or(Value::String(edit.buffer.clone())),
-                                _ => Value::String(edit.buffer.clone()),
-                            };
-                            if let Some(obj) = entry.config.as_object_mut() {
-                                obj.insert(edit.field.clone(), val);
+                        if st.selected < st.entries.len() && dd.selected < dd.items.len() {
+                            let chosen = dd.items[dd.selected].clone();
+                            st.entries[st.selected].ptype = chosen.clone();
+                            ensure_form_for_selected(st);
+                            if let Some(form) = &mut st.form {
+                                form.selected = 1.min(form.fields.len());
+                                form.editing = false;
+                                form.message = Some("Type changed".to_string());
                             }
                         }
-                        st.edit = None;
+                        st.dropdown = None;
+                		return;
                     }
-                    KeyCode::Backspace => { edit.buffer.pop(); }
-                    KeyCode::Char(c) => { edit.buffer.push(c); }
-                    _ => {}
+                    KeyCode::Esc => { st.dropdown = None; return; }
+                    _ => { return; }
                 }
                 return;
             }
-            // Schema-driven form mode
-            if let Some(form) = &mut st.form {
-                match key.code {
-                    KeyCode::Esc => { st.form = None; }
-                    KeyCode::Up => { if form.selected > 0 { form.selected -= 1; } }
-                    KeyCode::Down => { if form.selected + 1 < form.fields.len() { form.selected += 1; } }
-                    KeyCode::Enter => { form.editing = !form.editing; }
-                    KeyCode::Backspace => { if form.editing { if let Some(ch) = form.fields.get_mut(form.selected) { ch.buffer.pop(); } } }
-                    KeyCode::Tab => { if form.selected + 1 < form.fields.len() { form.selected += 1; } else { form.selected = 0; } }
-                    KeyCode::Char('s') | KeyCode::Char('S') => {
-                        // Validate required fields
-                        let mut missing: Vec<String> = Vec::new();
-                        for ff in &form.fields { if ff.schema.required && ff.buffer.trim().is_empty() { missing.push(ff.schema.name.clone()); } }
-                        if !missing.is_empty() {
-                            form.message = Some(format!("Missing required: {}", missing.join(", ")));
-                        } else {
-                            // Save back to selected provider config
-                            if st.selected < st.entries.len() {
-                                if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
-                                    for ff in &form.fields {
-                                        let key = ff.schema.name.clone();
-                                        if ff.schema.ftype == "int" {
-                                            if let Ok(n) = ff.buffer.parse::<i64>() { obj.insert(key, Value::Number(n.into())); } else { obj.insert(key, Value::String(ff.buffer.clone())); }
-                                        } else {
-                                            obj.insert(key, Value::String(ff.buffer.clone()));
+            // Pane focus shortcuts
+            match key.code {
+                KeyCode::Tab => {
+                    if st.is_add_row() { st.add_default(); }
+                    if st.selected < st.entries.len() { ensure_form_for_selected(st); st.focus_right = true; }
+                },
+                KeyCode::BackTab => { st.focus_right = false; },
+                _ => {}
+            }
+            if st.focus_right {
+                // Right pane: inline form
+                if st.form.is_none() && st.selected < st.entries.len() { ensure_form_for_selected(st); }
+                if let Some(form) = &mut st.form {
+                    match key.code {
+                        KeyCode::Esc => { if form.editing { form.editing = false; } else { st.focus_right = false; } }
+                        KeyCode::Up => { if form.selected > 0 { form.selected -= 1; } }
+                        KeyCode::Down => { let total = form.fields.len() + 3; if form.selected + 1 < total { form.selected += 1; } }
+                        KeyCode::Enter => {
+                            // If on Type row: open dropdown
+                            if form.selected == 0 {
+                                let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
+                                let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
+                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string() });
+                                return;
+                            }
+                            // If on Save/Cancel buttons, act; else toggle edit
+                            let save_idx = form.fields.len() + 1;
+                            let cancel_idx = form.fields.len() + 2;
+                            let total = form.fields.len() + 3;
+                            if form.selected == save_idx {
+                                let mut missing: Vec<String> = Vec::new();
+                                for ff in &form.fields { if ff.schema.required && ff.buffer.trim().is_empty() { missing.push(ff.schema.name.clone()); } }
+                                if !missing.is_empty() {
+                                    form.message = Some(format!("Missing required: {}", missing.join(", ")));
+                                } else {
+                                    if st.selected < st.entries.len() {
+                                        if let Some(obj) = st.entries[st.selected].config.as_object_mut() {
+                                            for ff in &form.fields {
+                                                let key2 = ff.schema.name.clone();
+                                                if ff.schema.ftype == "int" {
+                                                    if let Ok(n) = ff.buffer.parse::<i64>() { obj.insert(key2, Value::Number(n.into())); } else { obj.insert(key2, Value::String(ff.buffer.clone())); }
+                                                } else {
+                                                    obj.insert(key2, Value::String(ff.buffer.clone()));
+                                                }
+                                            }
                                         }
                                     }
+                                    form.message = Some("Saved".to_string());
                                 }
+                            } else if form.selected == cancel_idx { // Cancel
+                                form.editing = false;
+                                st.focus_right = false;
+                            } else {
+                                form.editing = !form.editing;
                             }
-                            st.form = None;
+                        }
+                        KeyCode::Left => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { ff.cursor -= 1; } } } }
+                        KeyCode::Right => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; } } } }
+                        KeyCode::Home => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = 0; } } }
+                        KeyCode::End => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = ff.buffer.chars().count(); } } }
+                        KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; } } } }
+                        KeyCode::Delete => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { let len = ff.buffer.chars().count(); if ff.cursor < len { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; } } } }
+                        KeyCode::Tab => { let total = form.fields.len() + 3; form.selected = (form.selected + 1) % total; }
+                        KeyCode::BackTab => { let total = form.fields.len() + 3; form.selected = if form.selected == 0 { total - 1 } else { form.selected - 1 }; }
+                        _ => {}
+                    }
+                    if let KeyCode::Char(c) = key.code {
+                        if form.editing {
+                            if let Some(ff) = form.fields.get_mut(form.selected) {
+                                let mut s = ff.buffer.clone();
+                                let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
+                                s.insert(idx, c);
+                                ff.buffer = s;
+                                ff.cursor += 1;
+                            }
                         }
                     }
-                    KeyCode::Char(c) => { if form.editing { if let Some(ch) = form.fields.get_mut(form.selected) { ch.buffer.push(c); } } }
-                    _ => { }
                 }
                 return;
             }
 
+            // Left pane: list navigation and actions
             match key.code {
-                KeyCode::Up => { if st.selected > 0 { st.selected -= 1; } },
-                KeyCode::Down => { if st.selected + 1 < st.len_with_add() { st.selected += 1; } },
+                KeyCode::Up => { if st.selected > 0 { st.selected -= 1; st.form = None; } },
+                KeyCode::Down => { if st.selected + 1 < st.len_with_add() { st.selected += 1; st.form = None; } },
                 KeyCode::Enter => {
-                    if st.is_add_row() { st.add_default(); }
-                }
-                KeyCode::Char('a') | KeyCode::Char('A') => { st.add_default(); }
-                KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); }
-                KeyCode::Char('s') | KeyCode::Char('S') => {
-                    if let Err(e) = st.save() { app.last_error = Some(format!("Save failed: {e}")); }
-                }
-                KeyCode::Char('m') | KeyCode::Char('M') => {
-                    app.page = Page::ModelBrowser;
-                }
-                KeyCode::Char('e') | KeyCode::Char('E') => {
-                    if st.selected < st.entries.len() {
-                        let cur = st.entries[st.selected].config.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        st.edit = Some(EditState{ field: "model".to_string(), buffer: cur });
+                    if st.is_add_row() {
+                        st.add_default();
+                        ensure_form_for_selected(st);
+                        st.focus_right = true;
+                    } else {
+                        ensure_form_for_selected(st);
+                        st.focus_right = true;
                     }
                 }
-                KeyCode::Char('h') | KeyCode::Char('H') => {
-                    if st.selected < st.entries.len() {
-                        let cur = st.entries[st.selected].config.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        st.edit = Some(EditState{ field: "host".to_string(), buffer: cur });
-                    }
-                }
-                KeyCode::Char('p') | KeyCode::Char('P') => {
-                    if st.selected < st.entries.len() {
-                        let cur = st.entries[st.selected].config.get("port").map(|v| v.to_string()).unwrap_or_default();
-                        st.edit = Some(EditState{ field: "port".to_string(), buffer: cur });
-                    }
-                }
-                KeyCode::Char('k') | KeyCode::Char('K') => {
-                    if st.selected < st.entries.len() {
-                        let cur = st.entries[st.selected].config.get("api_key").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        st.edit = Some(EditState{ field: "api_key".to_string(), buffer: cur });
-                    }
-                }
-                KeyCode::Char('b') | KeyCode::Char('B') => {
-                    if st.selected < st.entries.len() {
-                        let cur = st.entries[st.selected].config.get("base_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        st.edit = Some(EditState{ field: "base_url".to_string(), buffer: cur });
-                    }
-                }
+                KeyCode::Char('a') | KeyCode::Char('A') => { st.add_default(); ensure_form_for_selected(st); st.focus_right = true; }
+                KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); st.form = None; }
+                KeyCode::Char('m') | KeyCode::Char('M') => { app.page = Page::ModelBrowser; }
                 KeyCode::Char('t') | KeyCode::Char('T') => {
                     if st.selected < st.entries.len() {
                         match probe_provider(&st.entries[st.selected]) {
@@ -352,26 +402,8 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         }
                     }
                 }
-                KeyCode::Char('f') | KeyCode::Char('F') => {
-                    // Open dynamic form based on schema
-                    if st.selected < st.entries.len() {
-                        let ptype = st.entries[st.selected].ptype.clone();
-                        if let Some(fields) = st.schema_map.get(&ptype) {
-                            let mut ff = Vec::new();
-                            for sc in fields.iter() {
-                                let mut value = String::new();
-                                if let Some(cfg) = st.entries[st.selected].config.as_object() {
-                                    if let Some(v) = cfg.get(&sc.name) {
-                                        value = match v { Value::String(s) => s.clone(), other => other.to_string() };
-                                    }
-                                }
-                                if value.is_empty() { if let Some(d) = &sc.default { value = d.clone(); } }
-                                ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone() }, buffer: value });
-                            }
-                            st.form = Some(FormState { fields: ff, selected: 0, editing: false, message: None });
-                        }
-                    }
-                }
+                // Save from left pane
+                KeyCode::Char('s') | KeyCode::Char('S') => { if let Err(e) = st.save() { app.last_error = Some(format!("Save failed: {e}")); } }
                 _ => {}
             }
             // If a model was picked in model browser, apply to selected provider
@@ -450,6 +482,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
         Page::Readme => "Up/Down scroll • PgUp/PgDn faster • h TOC • Esc back",
         Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
+        Page::Configure => "Tab/Shift+Tab switch • ↑/↓ field • Enter edit/Save/Cancel • ←/→/Home/End • Del/Backspace • Esc back",
         Page::Build => "g toggle target • Enter write • Esc back",
         Page::SelectDefault => "Up/Down select • Enter set default • Esc back",
         _ => "Esc: back • q: quit • 1/2/3/4/b/s: sections • ?: help",
@@ -491,7 +524,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("?: help overlay • t: theme • a: animation"),
         Line::from("Diagnostics: e export • r refresh"),
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
-        Line::from("Configure: Up/Down • Enter/A add • D delete • S save • m model • E model • H host • P port • K key • B base_url • T test"),
+        Line::from("Configure: Tab/Shift+Tab • ↑/↓ field • Enter edit/Save/Cancel • ←/→/Home/End • Del/Backspace"),
         Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC"),
         Line::from("Build: g toggle Project/Global • Enter write"),
         Line::from("Welcome: Up/Down + Enter to open a section"),

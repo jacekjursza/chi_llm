@@ -573,6 +573,8 @@ Shortcuts:
 - `4` — Diagnostics (status + export JSON)
 - `↑/↓` or `k/j` — Navigate lists
 - `enter` — Select / Confirm
+- `Tab`/`Shift+Tab` — Switch between list and form in Providers
+- `F` — Providers: open dynamic form (schema‑driven)
 - `b` — Back to Welcome
 - `e` — Export diagnostics to `chi_llm_diagnostics.json`
 - `t` — Toggle theme, `a` — Toggle animation

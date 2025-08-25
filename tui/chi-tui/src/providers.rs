@@ -3,7 +3,7 @@ use std::fs;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use ratatui::layout::Rect;
+use ratatui::layout::{Rect, Layout, Direction, Constraint};
 use ratatui::prelude::Frame;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -159,9 +159,10 @@ pub struct ProvidersState {
     pub selected: usize,
     pub schema_types: Vec<String>,
     pub schema_map: HashMap<String, Vec<FieldSchema>>, // type -> fields
-    pub edit: Option<EditState>,
     pub test_status: Option<String>,
     pub form: Option<FormState>,
+    pub focus_right: bool,
+    pub dropdown: Option<DropdownState>,
 }
 
 impl ProvidersState {
@@ -171,9 +172,10 @@ impl ProvidersState {
             selected: 0,
             schema_types: Vec::new(),
             schema_map: HashMap::new(),
-            edit: None,
             test_status: None,
             form: None,
+            focus_right: false,
+            dropdown: None,
         }
     }
     pub fn len_with_add(&self) -> usize {
@@ -183,11 +185,12 @@ impl ProvidersState {
         self.selected >= self.entries.len()
     }
     pub fn add_default(&mut self) {
-        let ptype = self
-            .schema_types
-            .get(0)
-            .cloned()
-            .unwrap_or_else(|| "local".to_string());
+        // Prefer 'local' provider when available, otherwise first known type
+        let ptype = if let Some(idx) = self.schema_types.iter().position(|t| t == "local") {
+            self.schema_types.get(idx).cloned().unwrap_or_else(|| "local".to_string())
+        } else {
+            self.schema_types.get(0).cloned().unwrap_or_else(|| "local".to_string())
+        };
         let id = format!("p{}", self.entries.len() + 1);
         let name = format!("{}", &ptype);
         let cfg = serde_json::json!({"type": ptype});
@@ -246,12 +249,6 @@ impl ProvidersState {
         fs::write(path, serde_json::to_vec_pretty(&root)?)?;
         Ok(())
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct EditState {
-    pub field: String,
-    pub buffer: String,
 }
 
 pub fn load_providers_state() -> Result<ProvidersState> {
@@ -325,13 +322,23 @@ pub fn load_providers_state() -> Result<ProvidersState> {
         selected: 0,
         schema_types: types,
         schema_map,
-        edit: None,
         test_status: None,
         form: None,
+        focus_right: false,
+        dropdown: None,
     })
 }
 
 pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
+    // Split into two columns: left list and right details form
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(45),
+            Constraint::Percentage(55),
+        ]).split(area);
+
+    // Left: providers list
     let mut items: Vec<ListItem> = Vec::new();
     if let Some(st) = &app.providers {
         for (i, e) in st.entries.iter().enumerate() {
@@ -347,27 +354,26 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
             if !e.tags.is_empty() {
                 label.push_str(&format!("  [{}]", e.tags.join(",")));
             }
-            let style = if i == st.selected {
-                Style::default()
-                    .fg(app.theme.selected)
-                    .add_modifier(Modifier::BOLD)
+            let mut style = if i == st.selected {
+                Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(app.theme.fg)
             };
+            if !st.focus_right && i == st.selected {
+                style = style.add_modifier(Modifier::UNDERLINED);
+            }
             items.push(ListItem::new(Line::from(Span::styled(label, style))));
         }
         // Add provider row
-        let add_style = if st.is_add_row() {
-            Style::default()
-                .fg(app.theme.selected)
-                .add_modifier(Modifier::BOLD)
+        let mut add_style = if st.is_add_row() {
+            Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(app.theme.accent)
         };
-        items.push(ListItem::new(Line::from(Span::styled(
-            "+ Add provider",
-            add_style,
-        ))));
+        if !st.focus_right && st.is_add_row() {
+            add_style = add_style.add_modifier(Modifier::UNDERLINED);
+        }
+        items.push(ListItem::new(Line::from(Span::styled("+ Add provider", add_style))));
         if let Some(status) = &st.test_status {
             items.push(ListItem::new(Line::from(Span::styled(
                 format!("Status: {}", status),
@@ -385,57 +391,128 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                 .title("Configure Providers"),
         )
         .highlight_style(Style::default().fg(app.theme.selected));
-    f.render_widget(list, area);
+    f.render_widget(list, cols[0]);
 
-    // Input overlay for editing provider field or schema-driven form
+    // Right: provider details form (inline with input boxes)
+    let right = cols[1];
+    let mut title = "Provider Details".to_string();
     if let Some(st) = &app.providers {
-        if let Some(edit) = &st.edit {
-            let area_pop = centered_rect(60, 30, area);
-            let prompt = format!("Edit {}: {}", edit.field, edit.buffer);
-            let p = Paragraph::new(prompt)
-                .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(app.theme.frame))
-                        .title("Edit Field (Enter=save, Esc=cancel)"),
-                )
-                .alignment(ratatui::layout::Alignment::Left)
-                .wrap(Wrap { trim: true });
-            f.render_widget(Clear, area_pop);
-            f.render_widget(p, area_pop);
-        } else if let Some(form) = &st.form {
-            let area_pop = centered_rect(70, 70, area);
-            let mut lines: Vec<Line> = Vec::new();
-            lines.push(Line::from(Span::styled(
-                "Provider Form (↑/↓ select • Enter edit • s save • Esc close)",
-                Style::default().fg(app.theme.primary).add_modifier(Modifier::BOLD),
-            )));
-            for (i, ff) in form.fields.iter().enumerate() {
-                let req = if ff.schema.required { "*" } else { " " };
-                let display_val = if ff.schema.ftype == "secret" && !ff.buffer.is_empty() {
-                    "••••••".to_string()
-                } else { ff.buffer.clone() };
-                let mut label = format!("{} {}: {}", req, ff.schema.name, display_val);
-                if let Some(help) = &ff.schema.help { if !help.is_empty() { label.push_str(&format!("  — {}", help)); } }
-                let mut style = if i == form.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
-                // Highlight missing required fields in red
-                if ff.schema.required && ff.buffer.trim().is_empty() { style = Style::default().fg(ratatui::style::Color::Red); }
-                lines.push(Line::from(Span::styled(label, style)));
+        if st.selected < st.entries.len() {
+            let entry = &st.entries[st.selected];
+            title = format!("Provider Details — {}", entry.ptype);
+            let fields: Vec<FormField> = if let Some(form) = &st.form { form.fields.clone() } else { Vec::new() };
+            if fields.is_empty() {
+                let p = Paragraph::new("Tab to open form").style(Style::default().bg(app.theme.bg).fg(app.theme.secondary)).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title));
+                f.render_widget(p, right);
+            } else {
+                // Determine visible window and layout (Type + fields + msg + buttons)
+                let total_height = right.height as usize;
+                let reserve = 3 /*type*/ + 1 /*msg*/ + 3 /*buttons*/;
+                let per_field = 3usize;
+                let max_fields_visible = if total_height > reserve { (total_height - reserve) / per_field } else { 0 };
+                let mut start = 0usize;
+                let mut end = fields.len();
+                if let Some(form) = &st.form {
+                    if fields.len() > max_fields_visible {
+                        // Keep selected field in view (selection includes Type at idx 0)
+                        let sel = form.selected.saturating_sub(1); // map to field index
+                        let mut scroll = form.scroll;
+                        if sel < scroll { scroll = sel; }
+                        if sel >= scroll + max_fields_visible { scroll = sel + 1 - max_fields_visible; }
+                        start = scroll.min(fields.len().saturating_sub(max_fields_visible));
+                        end = (start + max_fields_visible).min(fields.len());
+                    }
+                }
+                let visible = &fields[start..end];
+                let mut cons: Vec<Constraint> = Vec::new();
+                cons.push(Constraint::Length(3)); // type row
+                cons.extend(std::iter::repeat(Constraint::Length(3)).take(visible.len()));
+                cons.push(Constraint::Length(1)); // message
+                cons.push(Constraint::Length(3)); // buttons
+                let chunks = Layout::default().direction(Direction::Vertical).constraints(cons).split(right);
+                // Type row (focusable, left/right cycles)
+                if let Some(form) = &st.form {
+                    let sel = form.selected;
+                    let style = if st.focus_right && sel == 0 { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                    let p = Paragraph::new(format!("Type: {}  (Enter to change)", entry.ptype))
+                        .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+                        .block(Block::default().borders(Borders::ALL).border_style(style));
+                    f.render_widget(p, chunks[0]);
+                }
+                // Draw visible fields as bordered boxes
+                for (i_vis, ff) in visible.iter().enumerate() {
+                    let i = start + i_vis;
+                    let mut display = if ff.schema.ftype == "secret" && !ff.buffer.is_empty() { "••••••".to_string() } else { ff.buffer.clone() };
+                    // Insert a visual cursor (keep length equal for secrets)
+                    let is_selected = st.focus_right && st.form.as_ref().map(|f| f.selected).unwrap_or(0) == i + 1; // +1 for type row
+                    let is_editing = st.form.as_ref().map(|f| f.editing).unwrap_or(false);
+                    if is_selected && is_editing {
+                        let pos = ff.cursor.min(ff.buffer.chars().count());
+                        if ff.schema.ftype == "secret" {
+                            display = ff.buffer.chars().map(|_| '•').collect();
+                        }
+                        let (byte_idx, _) = display.char_indices().nth(pos).unwrap_or((display.len(), ' '));
+                        display.insert(byte_idx, '▌');
+                    }
+                    let mut bstyle = Style::default().fg(app.theme.frame);
+                    if ff.schema.required && ff.buffer.trim().is_empty() { bstyle = Style::default().fg(ratatui::style::Color::Red); }
+                    if is_selected { bstyle = Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD); }
+                    let title_txt = if ff.schema.required { format!("* {}", ff.schema.name) } else { ff.schema.name.clone() };
+                    let block = Block::default().borders(Borders::ALL).border_style(bstyle).title(title_txt);
+                    let p = Paragraph::new(display).style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(block).wrap(Wrap { trim: false });
+                    f.render_widget(p, chunks[1 + i_vis]);
+                }
+                // Message line
+                if let Some(form) = &st.form {
+                    let mut msg = form.message.clone().unwrap_or_default();
+                    if fields.len() > end { msg = format!("{}  ↓ more…", msg); }
+                    if start > 0 { msg = format!("↑ more…  {}", msg); }
+                    let p = Paragraph::new(msg).style(Style::default().bg(app.theme.bg).fg(app.theme.secondary)).block(Block::default());
+                    f.render_widget(p, chunks[1 + visible.len()]);
+                    // Buttons: Save | Cancel
+                    let buttons_area = chunks[1 + visible.len() + 1];
+                    let mut btns = Vec::new();
+                    let sel = form.selected;
+                    let save_idx = fields.len() + 1; // after type+fields
+                    let cancel_idx = fields.len() + 2;
+                    let save_style = if sel == save_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                    let cancel_style = if sel == cancel_idx { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                    btns.push(Line::from(vec![
+                        Span::styled("[ Save ]  ", save_style),
+                        Span::styled("[ Cancel ]", cancel_style),
+                    ]));
+                    let p = Paragraph::new(btns).style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title)).alignment(ratatui::layout::Alignment::Left);
+                    f.render_widget(p, buttons_area);
+                }
             }
-            if let Some(msg) = &form.message { lines.push(Line::from(Span::styled(msg.clone(), Style::default().fg(ratatui::style::Color::Red)))); }
-            let p = Paragraph::new(lines)
-                .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+        } else {
+            let p = Paragraph::new("Add a provider to edit details.").style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title));
+            f.render_widget(p, right);
+        }
+    } else {
+        let p = Paragraph::new("Loading...").style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title));
+        f.render_widget(p, right);
+    }
+
+    // Overlay dropdown (e.g., type selector)
+    if let Some(st) = &app.providers {
+        if let Some(dd) = &st.dropdown {
+            let area_pop = centered_rect(50, 60, area);
+            let mut items: Vec<ListItem> = Vec::new();
+            for (i, it) in dd.items.iter().enumerate() {
+                let style = if i == dd.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                items.push(ListItem::new(Line::from(Span::styled(it.clone(), style))));
+            }
+            let list = List::new(items)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(app.theme.frame))
-                        .title("Edit Provider"),
+                        .title(dd.title.clone()),
                 )
-                .alignment(ratatui::layout::Alignment::Left)
-                .wrap(Wrap { trim: true });
+                .highlight_style(Style::default().fg(app.theme.selected));
             f.render_widget(Clear, area_pop);
-            f.render_widget(p, area_pop);
+            f.render_widget(list, area_pop);
         }
     }
 }
@@ -450,14 +527,22 @@ pub struct FieldSchema {
 }
 
 #[derive(Clone, Debug)]
-pub struct FormField { pub schema: FieldSchema, pub buffer: String }
+pub struct FormField { pub schema: FieldSchema, pub buffer: String, pub cursor: usize }
 
 #[derive(Clone, Debug)]
 pub struct FormState {
     pub fields: Vec<FormField>,
-    pub selected: usize,
+    pub selected: usize, // 0: Type, 1..=fields: fields, fields+1: Save, fields+2: Cancel
     pub editing: bool,
     pub message: Option<String>,
+    pub scroll: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropdownState {
+    pub items: Vec<String>,
+    pub selected: usize,
+    pub title: String,
 }
 
 pub fn probe_provider(entry: &ProviderScratchEntry) -> Result<String> {
