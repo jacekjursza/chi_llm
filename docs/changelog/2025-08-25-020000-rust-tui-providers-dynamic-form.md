@@ -15,7 +15,7 @@ Date: 2025-08-25
 - Required fields are marked and highlighted when empty; defaults are
   prefilled when value is missing.
 - Saving writes values back into the selected provider's `config` in
-  `chi.tmp.json`. Casting is applied for `int` fields; other types remain
+  `.chi_llm.tmp.json`. Casting is applied for `int` fields; other types remain
   strings (secrets are displayed masked).
 
 ## Acceptance
@@ -25,4 +25,3 @@ Date: 2025-08-25
 ## Follow-ups
 - Additional validation (masking per-field, enum constraints) and better
   error reporting on save.
-

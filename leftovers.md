@@ -18,10 +18,10 @@ This note captures context, status, and next steps from the current session.
   - Diagnostics (007): pulls `chi-llm diagnostics --json` and `models current --explain --json`; `e` export, `r` refresh.
   - Model Browser (006): `chi-llm models list --json`; filters `r` downloaded-only, `f` cycle tag, `i` info; Up/Down + Enter select; hands selected model back to Configure.
   - README Viewer (003): loads project `README.md`, simple heading styling, TOC toggle `h`, scrolling Up/Down/PgUp/PgDn.
-  - Select Default (005): reads/writes `chi.tmp.json` (`default_provider_id`), Up/Down + Enter to set default.
+  - Select Default (005): reads/writes `.chi_llm.tmp.json` (`default_provider_id`), Up/Down + Enter to set default.
   - Providers Catalog (004):
-    - Lists providers from `chi.tmp.json` plus a “+ Add provider” row.
-    - Add (A/Enter on +), Delete (D), Save (S) to `chi.tmp.json` (preserves `default_provider_id`).
+    - Lists providers from `.chi_llm.tmp.json` plus a “+ Add provider” row.
+    - Add (A/Enter on +), Delete (D), Save (S) to `.chi_llm.tmp.json` (preserves `default_provider_id`).
     - Edit overlay for key fields: E model, H host, P port, K api_key, B base_url.
     - Connectivity tests (T): LM Studio `/v1/models`, Ollama `/api/tags`, OpenAI `/v1/models` with Bearer; 3s timeout.
     - Integration with Model Browser (`m`) to set `config.model`.
@@ -72,4 +72,3 @@ This note captures context, status, and next steps from the current session.
 - Active branch: `devel`.
 - TUI sources: `tui/chi-tui/`.
 - UI launcher: `chi_llm/cli_modules/ui.py` (`chi-llm ui`).
-

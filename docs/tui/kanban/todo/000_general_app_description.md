@@ -56,7 +56,7 @@ Meta
 - Project Config `.chi_llm.json` (minimal, only non‑empty fields):
   - `{"provider": {"type": str, "host"?: str, "port"?: str|int, "api_key"?: str, "base_url"?: str, "org_id"?: str, "model"?: str, "timeout"?: int}}`
   - Compatibility: map legacy `llamacpp` to `local` on read.
-- Scratch Multi‑Provider `chi.tmp.json`:
+- Scratch Multi‑Provider `.chi_llm.tmp.json`:
   - `{ "providers": [ {"id": str, "name": str, "type": str, "tags": [str], "config": {...} } ], "default_provider_id"?: str }`
 - Local Models Catalog (via CLI): list of entries including `id`, `name`, `size`(string), `file_size_mb`(int), `context_window`(int), `recommended_ram_gb`(float), `tags`([str]), `downloaded`(bool), `current`(bool).
 

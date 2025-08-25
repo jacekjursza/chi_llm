@@ -16,8 +16,8 @@ Decision
 ## Sub‑tasks
 1) 002_navigation_keymap_skeleton.md — globalna nawigacja, szkielety ekranów, overlay pomocy, check obecności `chi-llm`.
 2) 003_readme_viewer.md — przeglądarka README z TOC, przewijanie, stabilny layout.
-3) 004_providers_catalog.md — CRUD katalogu providerów na bazie schematów z CLI, tagi, test połączeń (hooki), zapis `chi.tmp.json`.
-4) 005_default_provider_selection.md — wybór i zapis providera domyślnego w `chi.tmp.json`.
+3) 004_providers_catalog.md — CRUD katalogu providerów na bazie schematów z CLI, tagi, test połączeń (hooki), zapis `.chi_llm.tmp.json`.
+4) 005_default_provider_selection.md — wybór i zapis providera domyślnego w `.chi_llm.tmp.json`.
 5) 006_model_browser.md — przeglądarka modeli (CLI + ewentualnie sieć), filtry, wybór modelu do providera.
 6) 007_diagnostics.md — widok diagnostyki, eksport JSON, hints środowiskowe.
 7) 008_build_configuration.md — zapis `.chi_llm.json` (projekt/global), pretty‑print, tylko niepuste pola, zgodność ze schematem.
@@ -28,4 +28,4 @@ Każdy plik zawiera: Scope, Constraints (language‑agnostic, rely on CLI), UX/K
 
 ## Notes
 - Wycofujemy TUI w Go; ten EPIC dotyczy nowej implementacji (język nieustalony).
-- Źródłem prawdy są wyjścia CLI (`--json`) i pliki `.chi_llm.json`/`chi.tmp.json`.
+- Źródłem prawdy są wyjścia CLI (`--json`) i pliki `.chi_llm.json`/`.chi_llm.tmp.json`.

@@ -8,7 +8,7 @@ use ratatui::prelude::Frame;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
-use crate::util::run_cli_json;
+use crate::util::{run_cli_json, spinner_char};
 use super::state::compute_form_hash;
 use serde_json::Value;
 
@@ -61,7 +61,10 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
         let mut add_style = if st.is_add_row() { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.accent) };
         if !st.focus_right && st.is_add_row() { add_style = add_style.add_modifier(Modifier::UNDERLINED); }
         items.push(ListItem::new(Line::from(Span::styled("+ Add provider", add_style))));
-        if let Some(status) = &st.test_status {
+        if st.test_in_progress {
+            let spin = spinner_char(app.tick);
+            items.push(ListItem::new(Line::from(Span::styled(format!("Status: Testing… {}", spin), Style::default().fg(app.theme.secondary)))));
+        } else if let Some(status) = &st.test_status {
             items.push(ListItem::new(Line::from(Span::styled(format!("Status: {}", status), Style::default().fg(app.theme.secondary)))));
         }
     } else {
@@ -166,6 +169,11 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                 }
                 if let Some(form) = &st.form {
                     let mut msg = form.message.clone().unwrap_or_default();
+                    if st.test_in_progress {
+                        let spin = spinner_char(app.tick);
+                        if msg.is_empty() { msg = "Testing connection…".to_string(); }
+                        msg = format!("{} {}", msg, spin);
+                    }
                     if fields.len() > end { msg = format!("{}  ↓ more…", msg); }
                     if start > 0 { msg = format!("↑ more…  {}", msg); }
                     let p = Paragraph::new(msg).style(Style::default().bg(app.theme.bg).fg(app.theme.secondary)).block(Block::default());
@@ -292,7 +300,7 @@ pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<Stri
     }
     // Convert to &str slice for run
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let v = run_cli_json(&args_ref, Duration::from_secs(5))?;
+    let v = run_cli_json(&args_ref, Duration::from_secs(30))?;
     let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
     let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string();
     if ok { Ok(msg) } else { Err(anyhow!(msg)) }

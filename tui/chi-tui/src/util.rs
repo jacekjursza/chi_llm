@@ -90,3 +90,11 @@ pub fn run_cli_json(args: &[&str], timeout: Duration) -> Result<Value> {
     Ok(val)
 }
 
+pub fn spinner_char(tick: u64) -> char {
+    match tick % 4 {
+        0 => '|',
+        1 => '/',
+        2 => '-',
+        _ => '\\',
+    }
+}

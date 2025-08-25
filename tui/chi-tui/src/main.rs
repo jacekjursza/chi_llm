@@ -113,6 +113,31 @@ fn main() -> Result<()> {
 fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Result<()> {
     let tick_rate = Duration::from_millis(100);
     loop {
+        // Poll async test results (if any) before drawing to keep UI fresh
+        if let Some(st) = &mut app.providers {
+            if st.test_in_progress {
+                if let Some(rx) = &st.test_result_rx {
+                    if let Ok((ok, msg)) = rx.try_recv() {
+                        st.test_in_progress = false;
+                        st.test_result_rx = None;
+                        st.test_status = Some(if ok { msg.clone() } else { format!("Error: {}", msg) });
+                        if let Some(form) = &mut st.form {
+                            form.message = st.test_status.clone();
+                            if ok {
+                                if let Some(h) = st.pending_test_hash.take() {
+                                    form.last_test_ok_hash = Some(h);
+                                }
+                            } else {
+                                form.last_test_ok_hash = None;
+                                st.pending_test_hash = None;
+                            }
+                        } else {
+                            st.pending_test_hash = None;
+                        }
+                    }
+                }
+            }
+        }
         terminal.draw(|f| ui(f, &app))?;
         if event::poll(tick_rate)? {
             if let Event::Key(key) = event::read()? {
@@ -147,6 +172,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> R
                 handle_key(&mut app, key);
             }
         }
+        // Advance animation tick for spinners/headers
+        app.tick = app.tick.wrapping_add(1);
         if app.should_quit { break; }
     }
     Ok(())
@@ -441,25 +468,24 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             let cancel_idx = form.fields.len() + 3;
                             let total = form.fields.len() + 4;
                             if form.selected == test_idx {
-                                // Run test: use CLI where applicable
-                                let mut status = String::new();
-                                let mut ptype_cur = String::new();
+                                if st.test_in_progress { return; }
+                                // Async test: spawn thread and show spinner
                                 if st.selected < st.entries.len() {
-                                    let entry = &st.entries[st.selected];
-                                    ptype_cur = entry.ptype.clone();
-                                    match probe_provider(entry) {
-                                        Ok(msg) => { status = msg; },
-                                        Err(e) => { status = format!("Error: {}", e); },
-                                    }
+                                    let entry = st.entries[st.selected].clone();
+                                    let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
+                                    st.test_result_rx = Some(rx);
+                                    st.test_in_progress = true;
+                                    let cur_hash = providers::compute_form_hash(&form.fields);
+                                    st.pending_test_hash = Some(cur_hash);
+                                    form.message = Some("Testing connection…".to_string());
+                                    std::thread::spawn(move || {
+                                        let res = probe_provider(&entry);
+                                        match res {
+                                            Ok(msg) => { let _ = tx.send((true, msg)); },
+                                            Err(e) => { let _ = tx.send((false, e.to_string())); },
+                                        }
+                                    });
                                 }
-                                let cur_hash = providers::compute_form_hash(&form.fields);
-                                let low = status.to_lowercase();
-                                if (ptype_cur == "lmstudio" || ptype_cur == "ollama" || ptype_cur == "openai" || ptype_cur == "anthropic" || ptype_cur == "local" || ptype_cur == "local-custom" || ptype_cur == "local-zeroconfig") && !low.starts_with("error") && !low.contains("http ") {
-                                    form.last_test_ok_hash = Some(cur_hash);
-                                } else {
-                                    form.last_test_ok_hash = None;
-                                }
-                                form.message = Some(status);
                             } else if form.selected == save_idx {
                                 let mut missing: Vec<String> = Vec::new();
                                 for ff in &form.fields { if ff.schema.required && ff.buffer.trim().is_empty() { missing.push(ff.schema.name.clone()); } }
@@ -662,11 +688,22 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); st.form = None; },
                 KeyCode::Char('m') | KeyCode::Char('M') => { app.page = Page::ModelBrowser; },
                 KeyCode::Char('t') | KeyCode::Char('T') => {
+                    if st.test_in_progress { return; }
                     if st.selected < st.entries.len() {
-                        match probe_provider(&st.entries[st.selected]) {
-                            Ok(msg) => st.test_status = Some(msg),
-                            Err(e) => st.test_status = Some(format!("Error: {}", e)),
-                        }
+                        let entry = st.entries[st.selected].clone();
+                        let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
+                        st.test_result_rx = Some(rx);
+                        st.test_in_progress = true;
+                        st.test_status = None;
+                        // If we have a form, capture current hash for potential gating feedback
+                        if let Some(form) = &st.form { st.pending_test_hash = Some(providers::compute_form_hash(&form.fields)); }
+                        std::thread::spawn(move || {
+                            let res = probe_provider(&entry);
+                            match res {
+                                Ok(msg) => { let _ = tx.send((true, msg)); },
+                                Err(e) => { let _ = tx.send((false, e.to_string())); },
+                            }
+                        });
                     }
                 },
                 // Save from left pane

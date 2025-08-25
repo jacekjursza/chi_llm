@@ -12,7 +12,7 @@ Meta
 
 ## Scope
 - Target selection: Project (CWD) vs Global (user config path). Show paths.
-- Resolve active provider: use `default_provider_id` from `chi.tmp.json` or allow explicit override for this write only (optional).
+- Resolve active provider: use `default_provider_id` from `.chi_llm.tmp.json` or allow explicit override for this write only (optional).
 - Serialize provider config: include only non-empty fields; pretty-print; port may be number or string.
 - Compatibility: on read, map legacy `llamacpp` → `local`.
 - Confirm after write and show file path.

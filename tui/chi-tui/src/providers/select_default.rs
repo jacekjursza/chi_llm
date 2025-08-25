@@ -26,7 +26,7 @@ pub struct ProviderEntry {
 }
 
 pub fn load_providers_scratch() -> Result<DefaultProviderState> {
-    let path = "chi.tmp.json";
+    let path = ".chi_llm.tmp.json";
     let text = fs::read_to_string(path).unwrap_or_else(|_| "{}".to_string());
     let v: Value = serde_json::from_str(&text)?;
     let mut providers: Vec<ProviderEntry> = Vec::new();
@@ -46,7 +46,7 @@ pub fn load_providers_scratch() -> Result<DefaultProviderState> {
 }
 
 pub fn save_default_provider(id: &str) -> Result<()> {
-    let path = "chi.tmp.json";
+    let path = ".chi_llm.tmp.json";
     let mut root: Value = if let Ok(text) = fs::read_to_string(path) {
         serde_json::from_str(&text).unwrap_or_else(|_| Value::Object(Default::default()))
     } else {
@@ -70,7 +70,7 @@ pub fn draw_select_default(f: &mut Frame, area: Rect, app: &App) {
             let style = if i == st.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
             items.push(ListItem::new(Line::from(Span::styled(label, style))))
         }
-        if st.providers.is_empty() { items.push(ListItem::new("No providers found in chi.tmp.json → Configure first.")); }
+        if st.providers.is_empty() { items.push(ListItem::new("No providers found in .chi_llm.tmp.json → Configure first.")); }
     } else {
         items.push(ListItem::new("Loading providers..."));
     }
@@ -79,4 +79,3 @@ pub fn draw_select_default(f: &mut Frame, area: Rect, app: &App) {
         .highlight_style(Style::default().fg(app.theme.selected));
     f.render_widget(list, area);
 }
-

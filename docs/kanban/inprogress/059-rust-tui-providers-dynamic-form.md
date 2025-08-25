@@ -2,7 +2,7 @@
 
 ## Summary (What)
 - Use `chi-llm providers schema --json` to render provider-specific dynamic forms.
-- Allow navigating fields, editing values, and saving back to `chi.tmp.json`.
+- Allow navigating fields, editing values, and saving back to `.chi_llm.tmp.json`.
 
 ## Why
 - Reduce hardcoded field handling; align TUI with CLI schemas and validation.
@@ -17,7 +17,7 @@
 ## Acceptance Criteria
 - Pressing `F` opens a form matching the selected provider type.
 - Required fields marked; defaults prefilled when no value exists.
-- Saving writes values back to the selected provider `config` in `chi.tmp.json`.
+- Saving writes values back to the selected provider `config` in `.chi_llm.tmp.json`.
 - Build compiles; no regressions in keybindings or other screens.
 
 ## Notes

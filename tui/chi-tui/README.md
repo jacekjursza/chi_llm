@@ -21,7 +21,21 @@ cargo run -- --no-alt  # start without switching to alternate screen
 
 ### Status & Priorities
 
-- Shipping over backlog: Some historic TUI TODOs may be stale. Prioritize shipping the working Rust TUI (core flows, save/build from `.chi_llm.tmp.json` to `.chi_llm.json`, provider E2E test) over non‑essential polish.
+Status
+- Bootable skeleton: Welcome, README (with TOC), Configure, Select Default, Model Browser, Diagnostics, Build, Settings.
+- CLI integration: checks `chi-llm` presence; reads schemas (`providers schema`), diagnostics, model lists; runs provider tests and model discovery.
+- Providers form: dynamic fields from schema, dropdowns for enum-like fields, model pickers per provider, connection Test gating before Save.
+- Build: writes active provider to project (`.chi_llm.json`) or global cache; maps local variants to canonical `local`.
+- UX: global keymap, help overlay, dark synthwave theme, basic settings (theme/animation).
+
+Priorities (P0)
+- E2E happy path: Configure → Test → Save → Set Default → Build (project/global) → `chi-llm models current --explain` matches selection.
+- Error hardening: clear, actionable messages on CLI errors/timeouts; keep UI responsive.
+
+Next (P1)
+- Local-custom discovery: robust `.gguf` scan from `auto_discovery_gguf_paths` with empty‑state hints.
+- Minor UX polish: consistent footers per page, subtle highlights, and focus states.
+- Preferences: persist lightweight UI prefs (theme/alt-screen) between runs.
 
 ### Local providers UX
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::time::Duration;
+use std::sync::mpsc::Receiver;
 
 use anyhow::Result;
 use serde_json::Value;
@@ -16,13 +17,16 @@ pub struct ProviderScratchEntry {
     pub config: Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ProvidersState {
     pub entries: Vec<ProviderScratchEntry>,
     pub selected: usize,
     pub schema_types: Vec<String>,
     pub schema_map: HashMap<String, Vec<FieldSchema>>, // type -> fields
     pub test_status: Option<String>,
+    pub test_in_progress: bool,
+    pub test_result_rx: Option<Receiver<(bool, String)>>,
+    pub pending_test_hash: Option<String>,
     pub form: Option<FormState>,
     pub focus_right: bool,
     pub dropdown: Option<DropdownState>,
@@ -36,6 +40,9 @@ impl ProvidersState {
             schema_types: Vec::new(),
             schema_map: HashMap::new(),
             test_status: None,
+            test_in_progress: false,
+            test_result_rx: None,
+            pending_test_hash: None,
             form: None,
             focus_right: false,
             dropdown: None,
@@ -164,6 +171,9 @@ pub fn load_providers_state() -> Result<ProvidersState> {
         schema_types: types,
         schema_map,
         test_status: None,
+        test_in_progress: false,
+        test_result_rx: None,
+        pending_test_hash: None,
         form: None,
         focus_right: false,
         dropdown: None,
