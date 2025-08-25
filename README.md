@@ -572,7 +572,7 @@ Notes:
 - If you installed via pip and don’t have the source tree, place a prebuilt `chi-tui` binary on your `PATH` (download from Releases). `chi-llm ui` will detect and run it.
 - To build from source instead, clone the repo and run `cargo build --release` in `tui/chi-tui`; `chi-llm ui` will auto-pick it up when launched from the repo.
 
-Shortcuts:
+"Shortcuts:
 - `1/2/3` — Sections (Welcome / Configure / (Re)Build)
 - `4` — Diagnostics (status + export JSON)
 - `↑/↓` or `k/j` — Navigate lists
@@ -581,8 +581,9 @@ Shortcuts:
 - `←/→` — Switch between buttons in form groups (e.g., Save/Cancel)
 - README: with TOC visible (`h`), `Tab` switches TOC/Content, `Enter` jumps
 - `F` — Providers: open dynamic form (schema‑driven)
+- `U` — Providers: Find URL (lmstudio/ollama)
 - `b` — Back to Welcome
 - `e` — Export diagnostics to `chi_llm_diagnostics.json`
-- `t` — Toggle theme, `a` — Toggle animation
+- `t` — Toggle theme, `a` — Toggle animation"
 
 Note: the previous Python/Textual UI has been removed. The Go TUI has been retired. The interactive UI is implemented in Rust/ratatui under `tui/chi-tui/` and is launched via `chi-llm ui`.
