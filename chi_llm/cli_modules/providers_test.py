@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from . import providers_url as _prov_url  # WSL detection / future reuse
 
 
 def _print_json(obj: Dict[str, Any]) -> None:
@@ -352,6 +353,21 @@ def cmd_test_provider(args):
             out = _probe_anthropic(base_url, api_key, timeout)
         else:
             out = _result(False, None, None, f"{ptype}: unsupported provider type")
+
+    # UX hint: if unreachable in WSL, suggest find-url / auto-url
+    try:
+        if (
+            not out.get("ok")
+            and ptype in ("lmstudio", "ollama")
+            and _prov_url._is_wsl()  # type: ignore[attr-defined]
+        ):
+            tip = (
+                f" Tip: WSL detected. Try 'chi-llm providers find-url --type {ptype}' "
+                f"and then 'chi-llm providers set --type {ptype} --auto-url'."
+            )
+            out["message"] = f"{out.get('message','')}{tip}"
+    except Exception:
+        pass
 
     if getattr(args, "json", False):
         _print_json(out)
