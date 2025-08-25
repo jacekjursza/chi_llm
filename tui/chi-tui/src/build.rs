@@ -83,13 +83,13 @@ pub fn draw_build_config(f: &mut Frame, area: Rect, app: &App) {
 }
 
 pub fn get_default_provider_summary() -> Result<(String, String)> {
-    let path = "chi.tmp.json";
+    let path = ".chi_llm.tmp.json";
     let text = std::fs::read_to_string(path).map_err(|e| anyhow!("{}", e))?;
     let v: Value = serde_json::from_str(&text)?;
     let def = v
         .get("default_provider_id")
         .and_then(|x| x.as_str())
-        .ok_or_else(|| anyhow!("no default_provider_id in chi.tmp.json"))?;
+        .ok_or_else(|| anyhow!("no default_provider_id in .chi_llm.tmp.json"))?;
     if let Some(arr) = v.get("providers").and_then(|x| x.as_array()) {
         for p in arr {
             let id = p.get("id").and_then(|x| x.as_str()).unwrap_or("");
@@ -107,17 +107,17 @@ pub fn get_default_provider_summary() -> Result<(String, String)> {
 }
 
 pub fn write_active_config(target: BuildTarget) -> Result<String> {
-    let path = "chi.tmp.json";
+    let path = ".chi_llm.tmp.json";
     let text = std::fs::read_to_string(path).map_err(|e| anyhow!("{}", e))?;
     let v: Value = serde_json::from_str(&text)?;
     let def = v
         .get("default_provider_id")
         .and_then(|x| x.as_str())
-        .ok_or_else(|| anyhow!("no default_provider_id in chi.tmp.json"))?;
+        .ok_or_else(|| anyhow!("no default_provider_id in .chi_llm.tmp.json"))?;
     let arr = v
         .get("providers")
         .and_then(|x| x.as_array())
-        .ok_or_else(|| anyhow!("no providers array in chi.tmp.json"))?;
+        .ok_or_else(|| anyhow!("no providers array in .chi_llm.tmp.json"))?;
     let mut ptype = String::new();
     let mut cfg = serde_json::Map::new();
     for p in arr {

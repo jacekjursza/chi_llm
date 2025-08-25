@@ -78,7 +78,7 @@ impl ProvidersState {
         }
     }
     pub fn save(&self) -> Result<()> {
-        let path = "chi.tmp.json";
+        let path = ".chi_llm.tmp.json";
         let mut root: Value = if let Ok(text) = fs::read_to_string(path) {
             serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({}))
         } else {
@@ -142,7 +142,7 @@ pub fn load_providers_state() -> Result<ProvidersState> {
     }
     types.sort();
     // Load scratch file
-    let path = "chi.tmp.json";
+    let path = ".chi_llm.tmp.json";
     let text = fs::read_to_string(path).unwrap_or_else(|_| "{}".to_string());
     let v: Value = serde_json::from_str(&text)?;
     let mut entries: Vec<ProviderScratchEntry> = Vec::new();

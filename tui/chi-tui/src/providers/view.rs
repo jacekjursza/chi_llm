@@ -1,4 +1,6 @@
 use std::time::Duration;
+use std::collections::HashMap;
+use std::fs;
 
 use anyhow::{Result, anyhow};
 use ratatui::layout::{Rect, Layout, Direction, Constraint};
@@ -14,6 +16,31 @@ use crate::app::App;
 use crate::util::centered_rect;
 
 use super::{ProvidersState, FormField};
+
+fn read_json(path: &str) -> Option<Value> {
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str::<Value>(&text).ok()
+}
+
+fn get_tmp_default_id() -> Option<String> {
+    let v = read_json(".chi_llm.tmp.json")?;
+    v.get("default_provider_id").and_then(|x| x.as_str()).map(|s| s.to_string())
+}
+
+fn get_final_provider_object() -> Option<HashMap<String, Value>> {
+    let v = read_json(".chi_llm.json")?;
+    v.get("provider").and_then(|x| x.as_object()).map(|m| m.clone().into_iter().collect())
+}
+
+fn value_to_norm_string(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
 
 pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
     let cols = Layout::default()
@@ -89,7 +116,19 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                 if let Some(form) = &st.form {
                     let sel = form.selected;
                     let style = if st.focus_right && sel == 0 { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
-                    let p = Paragraph::new(format!("Type: {}  (Enter to change)", entry.ptype)).style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(Block::default().borders(Borders::ALL).border_style(style));
+                    // Unsaved marker for Type: show * when selected provider is default and final provider type differs
+                    let mut type_label = String::from("Type");
+                    if let Some(def_id) = get_tmp_default_id() {
+                        if def_id == entry.id {
+                            if let Some(final_p) = get_final_provider_object() {
+                                if let Some(vt) = final_p.get("type") {
+                                    let final_type = value_to_norm_string(vt);
+                                    if final_type != entry.ptype { type_label.push('*'); }
+                                }
+                            }
+                        }
+                    }
+                    let p = Paragraph::new(format!("{}: {}  (Enter to change)", type_label, entry.ptype)).style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(Block::default().borders(Borders::ALL).border_style(style));
                     f.render_widget(p, chunks[0]);
                 }
                 for (i_vis, ff) in visible.iter().enumerate() {
@@ -106,7 +145,21 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                     let mut bstyle = Style::default().fg(app.theme.frame);
                     if ff.schema.required && ff.buffer.trim().is_empty() { bstyle = Style::default().fg(ratatui::style::Color::Red); }
                     if is_selected { bstyle = Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD); }
-                    let title_txt = if ff.schema.required { format!("* {}", ff.schema.name) } else { ff.schema.name.clone() };
+                    // Unsaved marker per field: show * at label end when selected provider is default and field differs from final provider
+                    let mut title_txt = if ff.schema.required { format!("* {}", ff.schema.name) } else { ff.schema.name.clone() };
+                    if let Some(def_id) = get_tmp_default_id() {
+                        if def_id == entry.id {
+                            if let Some(final_p) = get_final_provider_object() {
+                                let final_val = final_p.get(&ff.schema.name).map(value_to_norm_string);
+                                let current_val = ff.buffer.clone();
+                                if final_val.map(|v| v != current_val).unwrap_or(true) {
+                                    // When final is missing the key or value differs, mark as unsaved
+                                    title_txt.push(' ');
+                                    title_txt.push('*');
+                                }
+                            }
+                        }
+                    }
                     let block = Block::default().borders(Borders::ALL).border_style(bstyle).title(title_txt);
                     let p = Paragraph::new(display).style(Style::default().bg(app.theme.bg).fg(app.theme.fg)).block(block).wrap(Wrap { trim: false });
                     f.render_widget(p, chunks[1 + i_vis]);

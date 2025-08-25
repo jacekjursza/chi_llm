@@ -42,3 +42,4 @@
 - Prefer incremental, test‑backed changes; add unit tests per feature.
 - Reference architecture principles: `docs/architecture-principles.md`.
 - Go TUI retired; all new TUI work targets `tui/chi-tui/` (Rust/ratatui).
+- TUI TODOs notice: some historic TODOs for TUI may be outdated. Focus is on shipping the current Rust TUI feature set (core flows, save/build, provider E2E test) over non‑essential polish. Treat older cards as advisory only.

@@ -19,6 +19,10 @@ cargo run -- --no-alt  # start without switching to alternate screen
 - Pages scaffolded: Welcome, README, Configure, Select Default, Model Browser, Diagnostics, Build, Settings.
 - Retro/Synthwave theme palette (neon magenta/cyan/blue) with dark background.
 
+### Status & Priorities
+
+- Shipping over backlog: Some historic TUI TODOs may be stale. Prioritize shipping the working Rust TUI (core flows, save/build from `.chi_llm.tmp.json` to `.chi_llm.json`, provider E2E test) over non‑essential polish.
+
 ### Local providers UX
 
 - `local` / `local-zeroconfig`:
