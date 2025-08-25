@@ -26,6 +26,9 @@ def cmd_discover_models(args):
     ptype = (getattr(args, "ptype", "") or "").strip().lower()
 
     try:
+        if ptype in ("local", "local-zeroconfig", "local-no-config", "local-custom"):
+            ids = discover_models_for_provider(ptype)
+            return _out_models(args, ptype, ids)
         if ptype == "lmstudio":
             host = (
                 getattr(args, "host", None)

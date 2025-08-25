@@ -17,6 +17,27 @@ def discover_models_for_provider(ptype: str, **kwargs):
     Returns a list of model IDs. Implemented via provider adapters when available.
     """
     p = (ptype or "").strip().lower()
+    if p in ("local", "local-custom"):
+        # Return curated catalog model ids
+        try:
+            from chi_llm.models import MODELS
+
+            return list(MODELS.keys())
+        except Exception:
+            return []
+    if p in ("local-zeroconfig", "local-no-config"):
+        # Return recommended/default subset for zero-config
+        try:
+            from chi_llm.models import MODELS
+
+            ids = []
+            for mid, mi in MODELS.items():
+                tags = getattr(mi, "tags", []) or []
+                if "recommended" in tags or "default" in tags:
+                    ids.append(mid)
+            return ids
+        except Exception:
+            return []
     if p == "lmstudio":
         from .lmstudio import LmStudioProvider
 
