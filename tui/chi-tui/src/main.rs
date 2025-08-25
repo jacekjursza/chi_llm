@@ -28,7 +28,7 @@ mod settings;
 use app::{App, Page, WELCOME_ITEMS};
 use build::{BuildState, BuildTarget, draw_build_config, write_active_config};
 use settings::draw_settings;
-use diagnostics::{draw_diagnostics, export_diagnostics, fetch_diagnostics};
+use diagnostics::{draw_diagnostics, export_diagnostics, fetch_diagnostics, detect_ollama, detect_lmstudio};
 use models::{fetch_models, draw_model_browser};
 use providers::{ProvidersState, FormState, DropdownState, load_providers_state, draw_providers_catalog, probe_provider, load_providers_scratch, save_default_provider, draw_select_default};
 use readme::{load_readme, draw_readme};
@@ -171,6 +171,34 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> R
                             match fetch_diagnostics(Duration::from_secs(5)) {
                                 Ok(d) => app.diag = Some(d),
                                 Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
+                            }
+                            continue;
+                        },
+                        KeyCode::Char('o') | KeyCode::Char('O') => {
+                            // Detect Ollama URL
+                            match detect_ollama(Duration::from_secs(3)) {
+                                Ok(msg) => {
+                                    if let Some(d) = &mut app.diag {
+                                        let mut d2 = d.clone();
+                                        d2.hint_ollama = Some(msg);
+                                        app.diag = Some(d2);
+                                    }
+                                }
+                                Err(e) => app.last_error = Some(format!("Detect Ollama failed: {e}")),
+                            }
+                            continue;
+                        },
+                        KeyCode::Char('m') | KeyCode::Char('M') => {
+                            // Detect LM Studio URL
+                            match detect_lmstudio(Duration::from_secs(3)) {
+                                Ok(msg) => {
+                                    if let Some(d) = &mut app.diag {
+                                        let mut d2 = d.clone();
+                                        d2.hint_lmstudio = Some(msg);
+                                        app.diag = Some(d2);
+                                    }
+                                }
+                                Err(e) => app.last_error = Some(format!("Detect LM Studio failed: {e}")),
                             }
                             continue;
                         },
@@ -965,7 +993,7 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let msg_text = match app.page {
-        Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • ?: help",
+        Page::Diagnostics => "Esc: back • q: quit • e: export • r: refresh • o: detect ollama • m: detect lmstudio • ?: help",
         Page::Readme => "Up/Down scroll • PgUp/PgDn • h TOC • Tab switch TOC/Content • Enter jump • Esc back",
         Page::ModelBrowser => "Up/Down select • Enter choose • r downloaded-only • f tag filter • i info • Esc back",
         Page::Configure => "Tab/Shift+Tab switch • ↑/↓ field • Enter edit/Test/Save/Cancel • ←/→/Home/End • Del/Backspace • L logs • Esc back",
@@ -1008,7 +1036,7 @@ fn draw_help_overlay(f: &mut Frame, app: &App) {
         Line::from("Up/Down: navigate • Enter: select • Esc: back • q/Ctrl+C: quit"),
         Line::from("1: README • 2: Configure • 3: Select Default • 4: Diagnostics • b: Build • s: Settings"),
         Line::from("?: help overlay • t: theme • a: animation"),
-        Line::from("Diagnostics: e export • r refresh"),
+        Line::from("Diagnostics: e export • r refresh • o detect ollama • m detect lmstudio"),
         Line::from("Model Browser: r downloaded-only • f cycle tag • i info"),
         Line::from("Configure: Tab/Shift+Tab • ↑/↓ field • Enter edit/Test/Save/Cancel • ←/→/Home/End • Del/Backspace • L logs"),
         Line::from("README: Up/Down/PgUp/PgDn scroll • h TOC • Tab switch TOC/Content • Enter jump"),

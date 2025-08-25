@@ -18,6 +18,8 @@ pub struct DiagState {
     pub diagnostics: Value,
     pub model_explain: Value,
     pub saved_path: Option<String>,
+    pub hint_ollama: Option<String>,
+    pub hint_lmstudio: Option<String>,
 }
 
 pub fn fetch_diagnostics(timeout: Duration) -> Result<DiagState> {
@@ -48,6 +50,8 @@ pub fn fetch_diagnostics(timeout: Duration) -> Result<DiagState> {
         diagnostics: diag,
         model_explain: explain,
         saved_path: None,
+        hint_ollama: None,
+        hint_lmstudio: None,
     })
 }
 
@@ -80,6 +84,20 @@ pub fn draw_diagnostics(f: &mut Frame, area: Rect, app: &App) {
         for s in &diag.summary {
             lines.push(Line::from(s.as_str()));
         }
+        lines.push(Line::from("—"));
+        lines.push(Line::from(Span::styled(
+            "Detect endpoints:",
+            Style::default()
+                .fg(app.theme.primary)
+                .add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from("o: detect Ollama • m: detect LM Studio"));
+        if let Some(h) = &diag.hint_ollama {
+            lines.push(Line::from(Span::styled(h.clone(), Style::default().fg(app.theme.secondary))));
+        }
+        if let Some(h) = &diag.hint_lmstudio {
+            lines.push(Line::from(Span::styled(h.clone(), Style::default().fg(app.theme.secondary))));
+        }
         if let Some(path) = &diag.saved_path {
             lines.push(Line::from(Span::styled(
                 format!("Exported: {}", path),
@@ -102,3 +120,28 @@ pub fn draw_diagnostics(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(p, area);
 }
 
+pub fn detect_ollama(timeout: Duration) -> Result<String> {
+    let v = run_cli_json(&["providers", "find-url", "--type", "ollama", "--json"], timeout)?;
+    let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+    if ok {
+        let host = v.get("host").and_then(|x| x.as_str()).unwrap_or("");
+        let port = v.get("port").and_then(|x| x.as_i64()).unwrap_or(0);
+        let src = v.get("source").and_then(|x| x.as_str()).unwrap_or("");
+        Ok(format!("Ollama: {}:{} ({})", host, port, src))
+    } else {
+        Ok("Ollama: not found".to_string())
+    }
+}
+
+pub fn detect_lmstudio(timeout: Duration) -> Result<String> {
+    let v = run_cli_json(&["providers", "find-url", "--type", "lmstudio", "--json"], timeout)?;
+    let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+    if ok {
+        let host = v.get("host").and_then(|x| x.as_str()).unwrap_or("");
+        let port = v.get("port").and_then(|x| x.as_i64()).unwrap_or(0);
+        let src = v.get("source").and_then(|x| x.as_str()).unwrap_or("");
+        Ok(format!("LM Studio: {}:{} ({})", host, port, src))
+    } else {
+        Ok("LM Studio: not found".to_string())
+    }
+}
