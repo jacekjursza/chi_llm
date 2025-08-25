@@ -584,3 +584,6 @@ Output fields:
 - `status`: HTTP status code (when applicable)
 - `latency_ms`: integer latency in milliseconds (when measured)
 - `message`: concise summary for end users
+
+WSL tip:
+- Gdy uruchamiasz CLI w WSL2, a LM Studio/Ollama działają na Windows, test może nie trafić w właściwy adres. W takim przypadku komunikat `message` zawiera podpowiedź, by użyć: `chi-llm providers find-url --type <lmstudio|ollama>` i następnie `chi-llm providers set --type <...> --auto-url`.
