@@ -776,8 +776,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             if form.selected > test_idx {
                                 form.selected -= 1;
                             } else if form.editing {
-                                if let Some(ff) = form.fields.get_mut(form.selected) {
-                                    if ff.cursor > 0 { ff.cursor -= 1; }
+                                // Map selection (1..=fields_len) to field index (0..fields_len-1)
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) {
+                                        if ff.cursor > 0 { ff.cursor -= 1; }
+                                    }
                                 }
                             }
                         },
@@ -789,26 +793,85 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             if form.selected >= test_idx && form.selected < cancel_idx {
                                 form.selected += 1;
                             } else if form.editing {
-                                if let Some(ff) = form.fields.get_mut(form.selected) {
-                                    if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; }
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) {
+                                        if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; }
+                                    }
                                 }
                             }
                         },
-                        KeyCode::Home => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = 0; } } },
-                        KeyCode::End => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = ff.buffer.chars().count(); } } },
-                        KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; form.last_test_ok_hash = None; } } } },
-                        KeyCode::Delete => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { let len = ff.buffer.chars().count(); if ff.cursor < len { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; form.last_test_ok_hash = None; } } } },
+                        KeyCode::Home => {
+                            if form.editing {
+                                let fields_len = form.fields.len();
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) { ff.cursor = 0; }
+                                }
+                            }
+                        },
+                        KeyCode::End => {
+                            if form.editing {
+                                let fields_len = form.fields.len();
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) { ff.cursor = ff.buffer.chars().count(); }
+                                }
+                            }
+                        },
+                        KeyCode::Backspace => {
+                            if form.editing {
+                                let fields_len = form.fields.len();
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) {
+                                        if ff.cursor > 0 {
+                                            let mut s = ff.buffer.clone();
+                                            let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0);
+                                            let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
+                                            s.replace_range(idx..idx2, "");
+                                            ff.buffer = s;
+                                            ff.cursor -= 1;
+                                            form.last_test_ok_hash = None;
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        KeyCode::Delete => {
+                            if form.editing {
+                                let fields_len = form.fields.len();
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) {
+                                        let len = ff.buffer.chars().count();
+                                        if ff.cursor < len {
+                                            let mut s = ff.buffer.clone();
+                                            let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
+                                            let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len());
+                                            s.replace_range(idx..idx2, "");
+                                            ff.buffer = s;
+                                            form.last_test_ok_hash = None;
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         KeyCode::Tab => { let total = form.fields.len() + 4; form.selected = (form.selected + 1) % total; },
                         KeyCode::BackTab => { let total = form.fields.len() + 4; form.selected = if form.selected == 0 { total - 1 } else { form.selected - 1 }; },
                         KeyCode::Char(c) => {
                             if form.editing {
-                                if let Some(ff) = form.fields.get_mut(form.selected) {
-                                    let mut s = ff.buffer.clone();
-                                    let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
-                                    s.insert(idx, c);
-                                    ff.buffer = s;
-                                    ff.cursor += 1;
-                                    form.last_test_ok_hash = None;
+                                let fields_len = form.fields.len();
+                                if form.selected >= 1 && form.selected <= fields_len {
+                                    let fi = form.selected - 1;
+                                    if let Some(ff) = form.fields.get_mut(fi) {
+                                        let mut s = ff.buffer.clone();
+                                        let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
+                                        s.insert(idx, c);
+                                        ff.buffer = s;
+                                        ff.cursor += 1;
+                                        form.last_test_ok_hash = None;
+                                    }
                                 }
                             }
                         },
