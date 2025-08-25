@@ -482,14 +482,6 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 form.selected += 1;
                             }
                         },
-                        KeyCode::Enter => {
-                            // If on Type row: open dropdown
-                            if form.selected == 0 {
-                                let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
-                                let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
-                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new(), downloaded: None });
-                                return;
-                            }
                         // Find URL for lmstudio/ollama (U)
                         KeyCode::Char('u') | KeyCode::Char('U') => {
                             if st.selected < st.entries.len() {
@@ -519,7 +511,15 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                     }
                                 }
                             }
-                        }
+                        },
+                        KeyCode::Enter => {
+                            // If on Type row: open dropdown
+                            if form.selected == 0 {
+                                let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
+                                let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
+                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new(), downloaded: None });
+                                return;
+                            }
                             // If on Test/Save/Cancel buttons, act; else toggle/edit field
                             let test_idx = form.fields.len() + 1;
                             let save_idx = form.fields.len() + 2;
