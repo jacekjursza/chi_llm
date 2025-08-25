@@ -184,6 +184,14 @@ pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<Stri
             let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
             Ok(format!("ollama: {} models", count))
         }
+        "anthropic" => {
+            let api_key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+            if api_key.is_empty() { return Ok("anthropic: missing api_key".to_string()); }
+            let args = ["providers", "discover-models", "--type", "anthropic", "--api-key", api_key, "--json"];
+            let v = run_cli_json(&args, Duration::from_secs(5))?;
+            let count = v.get("models").and_then(|d| d.as_array()).map(|a| a.len()).unwrap_or(0);
+            Ok(format!("anthropic: {} models", count))
+        }
         "openai" => {
             let base = entry.config.get("base_url").and_then(|v| v.as_str()).unwrap_or("https://api.openai.com");
             let api_key = entry.config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");

@@ -422,7 +422,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 }
                                 let cur_hash = providers::compute_form_hash(&form.fields);
                                 let low = status.to_lowercase();
-                                if (ptype_cur == "lmstudio" || ptype_cur == "ollama" || ptype_cur == "openai") && !low.starts_with("error") && !low.contains("http ") {
+                                if (ptype_cur == "lmstudio" || ptype_cur == "ollama" || ptype_cur == "openai" || ptype_cur == "anthropic") && !low.starts_with("error") && !low.contains("http ") {
                                     form.last_test_ok_hash = Some(cur_hash);
                                 } else {
                                     form.last_test_ok_hash = None;
@@ -466,14 +466,30 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 // If field has options, open dropdown, else toggle edit
                                 let fi = form.selected - 1; // map to fields index
                                 if let Some(ff) = form.fields.get(fi) {
-                                    // Special-case: dynamic model list for lmstudio/ollama using CLI
+                                    // Special-case: dynamic model list using CLI for supported providers
                                     let ptype = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
-                                    if ff.schema.name == "model" && (ptype == "lmstudio" || ptype == "ollama") {
-                                        // Use CLI discover-models
-                                        let host = form.fields.iter().find(|f| f.schema.name == "host").map(|f| f.buffer.clone()).unwrap_or_else(|| "localhost".to_string());
-                                        let port = form.fields.iter().find(|f| f.schema.name == "port").map(|f| f.buffer.clone()).unwrap_or_default();
-                                        let mut args = vec!["providers", "discover-models", "--type", &ptype, "--host", &host, "--json"];
-                                        if !port.is_empty() { args.push("--port"); args.push(&port); }
+                                    if ff.schema.name == "model" && (ptype == "lmstudio" || ptype == "ollama" || ptype == "openai" || ptype == "anthropic") {
+                                        // Use CLI discover-models with provider-specific args
+                                        let mut args: Vec<&str> = vec!["providers", "discover-models", "--type", &ptype, "--json"];    
+                                        // Hold owned strings so borrowed &strs live long enough
+                                        let (mut host, mut port, mut base, mut api_key, mut org) = (String::new(), String::new(), String::new(), String::new(), String::new());
+                                        if ptype == "lmstudio" || ptype == "ollama" {
+                                            host = form.fields.iter().find(|f| f.schema.name == "host").map(|f| f.buffer.clone()).unwrap_or_else(|| "localhost".to_string());
+                                            port = form.fields.iter().find(|f| f.schema.name == "port").map(|f| f.buffer.clone()).unwrap_or_default();
+                                            args.push("--host");
+                                            args.push(host.as_str());
+                                            if !port.is_empty() { args.push("--port"); args.push(port.as_str()); }
+                                        } else if ptype == "openai" {
+                                            base = form.fields.iter().find(|f| f.schema.name == "base_url").map(|f| f.buffer.clone()).unwrap_or_else(|| "https://api.openai.com".to_string());
+                                            api_key = form.fields.iter().find(|f| f.schema.name == "api_key").map(|f| f.buffer.clone()).unwrap_or_default();
+                                            org = form.fields.iter().find(|f| f.schema.name == "org_id").map(|f| f.buffer.clone()).unwrap_or_default();
+                                            if !base.is_empty() { args.push("--base-url"); args.push(base.as_str()); }
+                                            if !api_key.is_empty() { args.push("--api-key"); args.push(api_key.as_str()); }
+                                            if !org.is_empty() { args.push("--org-id"); args.push(org.as_str()); }
+                                        } else if ptype == "anthropic" {
+                                            api_key = form.fields.iter().find(|f| f.schema.name == "api_key").map(|f| f.buffer.clone()).unwrap_or_default();
+                                            if !api_key.is_empty() { args.push("--api-key"); args.push(api_key.as_str()); }
+                                        }
                                         match util::run_cli_json(&args, Duration::from_secs(5)) {
                                             Ok(v) => {
                                                 let mut items: Vec<String> = Vec::new();

@@ -94,6 +94,37 @@ def cmd_discover_models(args):
                     items.append({"id": mid})
             return _out({"provider": ptype, "models": items})
 
+        if ptype == "anthropic":
+            base_url = getattr(args, "base_url", None) or "https://api.anthropic.com"
+            api_key = (
+                getattr(args, "api_key", None)
+                or os.environ.get("ANTHROPIC_API_KEY")
+                or os.environ.get("CHI_LLM_ANTHROPIC_API_KEY")
+            )
+            if not api_key:
+                return _out(
+                    {"provider": ptype, "error": "missing api_key", "models": []}
+                )
+            url = f"{base_url.rstrip('/')}/v1/models"
+            req = _request.Request(url)
+            req.add_header("x-api-key", api_key)
+            # Anthropic requires a version header; pick a stable default
+            req.add_header("anthropic-version", "2023-06-01")
+            with _request.urlopen(req, timeout=5) as resp:
+                if resp.status != 200:
+                    raise HTTPError(
+                        url, resp.status, "HTTP error", hdrs=resp.headers, fp=None
+                    )
+                data = _json.loads(resp.read().decode("utf-8"))
+            items = []
+            # Some SDKs return {data: [...]}
+            arr = data.get("data") or data.get("models") or []
+            for it in arr:
+                mid = it.get("id") or it.get("name") or ""
+                if mid:
+                    items.append({"id": mid})
+            return _out({"provider": ptype, "models": items})
+
         return _out({"provider": ptype, "models": []})
     except (URLError, HTTPError) as e:  # pragma: no cover - network dependent
         if getattr(args, "json", False):
