@@ -3,7 +3,7 @@
 Meta
 - Type: Task
 - Priority: P2
-- Status: TODO
+- Status: In Progress
 
 ## Summary (What)
 - Add a proper dropdown selector widget for provider “Type” (already partially implemented) and extend it to any schema field that declares an enum of allowed values.
