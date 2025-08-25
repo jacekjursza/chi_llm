@@ -529,3 +529,26 @@ Primary interactive UI is implemented in Rust using `ratatui` + `crossterm` unde
 - (Re)Build: Enter writes project `.chi_llm.json` with minimal provider config
 
 Note: The Python/Textual UI has been removed. The Go UI has been retired.
+
+#### Discover available models (for UIs and scripts)
+
+Use `discover-models` to list models for certain providers. Output is JSON when `--json` is passed.
+
+```bash
+# LM Studio (default localhost:1234)
+chi-llm providers discover-models --type lmstudio --host 127.0.0.1 --port 1234 --json | jq '.models[0]'
+
+# Ollama (default localhost:11434)
+chi-llm providers discover-models --type ollama --host 127.0.0.1 --port 11434 --json | jq '.models[] | select(.id|test("llama"))'
+
+# OpenAI
+chi-llm providers discover-models --type openai \
+  --api-key "$OPENAI_API_KEY" \
+  --base-url https://api.openai.com \
+  --org-id "$OPENAI_ORG_ID" \
+  --json | jq '.models | length'
+```
+
+Notes:
+- LM Studio and Ollama use their local HTTP endpoints; OpenAI calls `/v1/models` with your API key.
+- Designed for UIs: the `models` array contains objects with at least `id`.
