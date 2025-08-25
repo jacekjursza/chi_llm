@@ -98,6 +98,7 @@ docs/s[0-9]*.png
 
 # Project-local config (do not commit developer-specific overrides)
 .chi_llm.json
+.chi_llm.tmp.json
 .chi_llm.yaml
 .chi_llm.yml
 

@@ -64,6 +64,21 @@ make test-fast X="-k 'not ui_cli'"
 make test-timeout TIMEOUT=60
 ```
 
+### Smoke Test (TUI Core Flow)
+
+Run a minimal end-to-end smoke via CLI (non-interactive) that exercises the core TUI flow (providers e2e test, write local provider, verify current model):
+
+```bash
+# Default model gemma-270m; override via MODEL_ID env var
+make smoke-tui          # uses scripts/smoke_tui.py
+MODEL_ID=phi3-mini make smoke-tui
+```
+
+What it does:
+- providers test --type local-zeroconfig --model <MODEL_ID> --e2e (with generous timeout)
+- providers set --type local --model <MODEL_ID> --local (writes .chi_llm.json)
+- models current --explain --json, then verifies effective_model == <MODEL_ID>
+
 ## Test Structure
 
 ```

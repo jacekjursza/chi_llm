@@ -4,7 +4,7 @@ T ?=
 X ?=
 TIMEOUT ?= 60
 
-.PHONY: help test test-fast test-collect test-core test-cli test-ui-cli test-providers test-diagnose test-timeout test-stacks
+.PHONY: help test test-fast test-collect test-core test-cli test-ui-cli test-providers test-diagnose test-timeout test-stacks smoke-tui
 .DEFAULT_GOAL := help
 
 help: ## Show help for common test targets
@@ -19,6 +19,7 @@ help: ## Show help for common test targets
 	@echo "  make test-diagnose              - verbose, durations"
 	@echo "  make test-timeout [TIMEOUT=..]  - with timeout plugin (if installed)"
 	@echo "  make test-stacks [TIMEOUT=..]   - dump stacks if stuck"
+	@echo "  make smoke-tui [MODEL_ID=..]    - CLI-based TUI smoke (local-zeroconfig)"
 
 test: ## Run full test suite (respects pytest.ini addopts)
 	$(PYTEST) $(T) $(X)
@@ -50,3 +51,5 @@ test-timeout: ## Add timeout watchdog (requires pytest-timeout)
 test-stacks: ## Dump stacks after TIMEOUT seconds via faulthandler
 	$(PYTEST) -vv -s --no-cov --faulthandler-timeout=$(TIMEOUT) $(T) $(X)
 
+smoke-tui: ## E2E smoke: providers e2e + set local + verify current
+	$(PYTHON) scripts/smoke_tui.py
