@@ -173,6 +173,57 @@ def _base_url(ptype: str, host: str, port: int) -> str:
     return f"http://{host}:{port}"
 
 
+def find_url(
+    ptype: str,
+    host_hint: Optional[str] = None,
+    port_hint: Optional[str | int] = None,
+    timeout: float = 1.8,
+) -> Dict[str, Any]:
+    """Programmatic variant: return result dict without printing."""
+    p = (ptype or "").strip().lower()
+    hosts, ports = build_candidates(p, host_hint=host_hint, port_hint=port_hint)
+
+    tried: List[str] = []
+    best: Optional[Tuple[str, int, str]] = None
+    source = ""
+
+    for h in hosts:
+        for prt in ports:
+            bu = _base_url(p, h, prt)
+            tried.append(bu)
+            ok, msg = _probe(p, h, prt, timeout)
+            if ok:
+                best = (h, prt, msg)
+                if h in ("127.0.0.1", "localhost"):
+                    source = "localhost"
+                elif h == "host.docker.internal":
+                    source = "docker-internal"
+                elif _is_wsl():
+                    ns = _parse_nameserver()
+                    source = "wsl-nameserver" if h == ns else "custom"
+                else:
+                    source = "custom"
+                break
+        if best:
+            break
+
+    obj: Dict[str, Any] = {"provider": p, "ok": bool(best is not None), "tried": tried}
+    if best:
+        host, port, msg = best
+        obj.update(
+            {
+                "host": host,
+                "port": int(port),
+                "base_url": _base_url(p, host, int(port)),
+                "source": source,
+                "message": msg,
+            }
+        )
+    else:
+        obj.update({"message": "No reachable server found"})
+    return obj
+
+
 def cmd_find_url(args):
     ptype = (getattr(args, "ptype", "") or "").strip().lower()
     if ptype not in ("lmstudio", "ollama"):

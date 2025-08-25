@@ -490,6 +490,36 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new(), downloaded: None });
                                 return;
                             }
+                        // Find URL for lmstudio/ollama (U)
+                        KeyCode::Char('u') | KeyCode::Char('U') => {
+                            if st.selected < st.entries.len() {
+                                let entry = st.entries[st.selected].clone();
+                                if entry.ptype == "lmstudio" || entry.ptype == "ollama" {
+                                    let args = vec!["providers", "find-url", "--type", entry.ptype.as_str(), "--json"];
+                                    match crate::util::run_cli_json(&args, std::time::Duration::from_secs(3)) {
+                                        Ok(v) => {
+                                            let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+                                            if ok {
+                                                let host = v.get("host").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                                                let port = v.get("port").and_then(|x| x.as_i64()).unwrap_or(0);
+                                                if let Some(form) = &mut st.form {
+                                                    for ff in &mut form.fields {
+                                                        if ff.schema.name == "host" && !host.is_empty() { ff.buffer = host.clone(); }
+                                                        if ff.schema.name == "port" && port > 0 { ff.buffer = format!("{}", port); }
+                                                    }
+                                                    form.message = Some("URL detected (U) — Save to persist".to_string());
+                                                }
+                                            } else {
+                                                if let Some(form) = &mut st.form { form.message = Some("URL not found".to_string()); }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            if let Some(form) = &mut st.form { form.message = Some(format!("find-url failed: {e}")); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                             // If on Test/Save/Cancel buttons, act; else toggle/edit field
                             let test_idx = form.fields.len() + 1;
                             let save_idx = form.fields.len() + 2;

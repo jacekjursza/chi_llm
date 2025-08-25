@@ -11,6 +11,7 @@ from typing import Dict, Any
 import json
 
 from ..utils import load_config
+from .providers_schema import PROVIDER_SCHEMAS
 
 try:
     from ..models import ModelManager, MODEL_DIR, MODELS
@@ -43,198 +44,7 @@ SUPPORTED = [
 
 # Provider field schema for UI/automation. This reflects what `providers set`
 # accepts today. Extend here if CLI gains new fields.
-PROVIDER_SCHEMAS = {
-    "local": {
-        "fields": [
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Model ID (GGUF)",
-            },
-            {
-                "name": "model_path",
-                "type": "string",
-                "required": False,
-                "help": "Absolute path to GGUF model file",
-            },
-            {
-                "name": "context_window",
-                "type": "int",
-                "required": False,
-                "help": "Override context window (n_ctx)",
-            },
-            {
-                "name": "n_gpu_layers",
-                "type": "int",
-                "required": False,
-                "help": "Layers offloaded to GPU",
-            },
-            {
-                "name": "output_tokens",
-                "type": "int",
-                "required": False,
-                "help": "Default max output tokens",
-            },
-        ]
-    },
-    "local-zeroconfig": {
-        "fields": [
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Recommended model ID from curated list",
-            }
-        ]
-    },
-    "local-custom": {
-        "fields": [
-            {
-                "name": "model_path",
-                "type": "string",
-                "required": False,
-                "help": "Absolute path to GGUF model file",
-            },
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Model ID (optional; overrides default)",
-            },
-            {
-                "name": "context_window",
-                "type": "int",
-                "required": False,
-                "help": "Override context window (n_ctx)",
-            },
-            {
-                "name": "n_gpu_layers",
-                "type": "int",
-                "required": False,
-                "help": "Layers offloaded to GPU",
-            },
-            {
-                "name": "output_tokens",
-                "type": "int",
-                "required": False,
-                "help": "Default max output tokens",
-            },
-        ]
-    },
-    "lmstudio": {
-        "fields": [
-            {
-                "name": "host",
-                "type": "string",
-                "required": False,
-                "default": "localhost",
-                "help": "Server host",
-            },
-            {
-                "name": "port",
-                "type": "int",
-                "required": False,
-                "default": 1234,
-                "help": "Server port",
-            },
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Default model ID",
-            },
-        ]
-    },
-    "ollama": {
-        "fields": [
-            {
-                "name": "host",
-                "type": "string",
-                "required": False,
-                "default": "localhost",
-                "help": "Server host",
-            },
-            {
-                "name": "port",
-                "type": "int",
-                "required": False,
-                "default": 11434,
-                "help": "Server port",
-            },
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Default model ID",
-            },
-        ]
-    },
-    "openai": {
-        "fields": [
-            {
-                "name": "api_key",
-                "type": "secret",
-                "required": True,
-                "help": "OpenAI API key",
-            },
-            {
-                "name": "base_url",
-                "type": "string",
-                "required": False,
-                "help": "API base URL",
-            },
-            {
-                "name": "org_id",
-                "type": "string",
-                "required": False,
-                "help": "Organization ID",
-            },
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Default model ID",
-            },
-        ]
-    },
-    "anthropic": {
-        "fields": [
-            {
-                "name": "api_key",
-                "type": "secret",
-                "required": True,
-                "help": "Anthropic API key",
-            },
-            {
-                "name": "model",
-                "type": "string",
-                "required": True,
-                "help": "Default model ID (e.g., claude-3-haiku-20240307)",
-            },
-        ]
-    },
-    "claude-cli": {
-        "fields": [
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Default model ID (if applicable)",
-            },
-        ]
-    },
-    "openai-cli": {
-        "fields": [
-            {
-                "name": "model",
-                "type": "string",
-                "required": False,
-                "help": "Default model ID (if applicable)",
-            },
-        ]
-    },
-}
+PROVIDER_SCHEMAS = PROVIDER_SCHEMAS
 
 
 def _print_json(obj: Any) -> None:
@@ -366,6 +176,34 @@ def cmd_providers(args):
             print("Supported:", ", ".join([p["type"] for p in SUPPORTED]))
             return
         provider_cfg: Dict[str, Any] = {"type": ptype}
+        # Optional: auto-detect host/port for lmstudio/ollama
+        if getattr(args, "auto_url", False) and ptype in {"lmstudio", "ollama"}:
+            try:
+                from .providers_url import find_url as _find_url  # type: ignore
+
+                res = _find_url(ptype)
+                if not res.get("ok"):
+                    if getattr(args, "json", False):
+                        _print_json(
+                            {
+                                "ok": False,
+                                "message": f"auto-url: no reachable {ptype} server",
+                                "tried": res.get("tried", []),
+                            }
+                        )
+                        return
+                    else:
+                        print(f"❌ auto-url: no reachable {ptype} server")
+                        return
+                # Apply detected host/port as defaults; explicit flags override below
+                provider_cfg["host"] = res.get("host")
+                provider_cfg["port"] = res.get("port")
+            except Exception as e:
+                if getattr(args, "json", False):
+                    _print_json({"ok": False, "message": f"auto-url failed: {e}"})
+                else:
+                    print(f"❌ auto-url failed: {e}")
+                return
         if getattr(args, "host", None):
             provider_cfg["host"] = args.host
         if getattr(args, "port", None):
@@ -499,6 +337,11 @@ def register(subparsers: _SubParsersAction):
     setp.add_argument("--api-key", dest="api_key", help="API key (if required)")
     setp.add_argument("--local", action="store_true", help="Write to project config")
     setp.add_argument("--json", action="store_true", help="Echo saved config as JSON")
+    setp.add_argument(
+        "--auto-url",
+        action="store_true",
+        help="For lmstudio/ollama: auto-detect host/port using find-url",
+    )
 
     tags = providers_sub.add_parser("tags", help="List available provider tags")
     tags.add_argument("--json", action="store_true", help="Output JSON")
