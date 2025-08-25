@@ -422,7 +422,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 }
                                 let cur_hash = providers::compute_form_hash(&form.fields);
                                 let low = status.to_lowercase();
-                                if (ptype_cur == "lmstudio" || ptype_cur == "ollama" || ptype_cur == "openai" || ptype_cur == "anthropic") && !low.starts_with("error") && !low.contains("http ") {
+                                if (ptype_cur == "lmstudio" || ptype_cur == "ollama" || ptype_cur == "openai" || ptype_cur == "anthropic" || ptype_cur == "local" || ptype_cur == "local-custom" || ptype_cur == "local-zeroconfig") && !low.starts_with("error") && !low.contains("http ") {
                                     form.last_test_ok_hash = Some(cur_hash);
                                 } else {
                                     form.last_test_ok_hash = None;
@@ -468,7 +468,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 if let Some(ff) = form.fields.get(fi) {
                                     // Special-case: dynamic model list using CLI for supported providers
                                     let ptype = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
-                                    if ff.schema.name == "model" && (ptype == "lmstudio" || ptype == "ollama" || ptype == "openai" || ptype == "anthropic") {
+                                    if ff.schema.name == "model" && (ptype == "lmstudio" || ptype == "ollama" || ptype == "openai" || ptype == "anthropic" || ptype == "local" || ptype == "local-zeroconfig") {
                                         // Use CLI discover-models with provider-specific args
                                         let mut args: Vec<&str> = vec!["providers", "discover-models", "--type", &ptype, "--json"];    
                                         // Hold owned strings so borrowed &strs live long enough
@@ -514,8 +514,27 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi) });
                                         return;
                                     }
-                                }
-                                form.editing = !form.editing;
+                                    } else if ff.schema.name == "model_path" && ptype == "local-custom" {
+                                        // Discover local GGUF files via CLI (local-custom only)
+                                        let args = vec!["providers", "discover-models", "--type", "local-custom", "--json"];    
+                                        match util::run_cli_json(&args, Duration::from_secs(5)) {
+                                            Ok(v) => {
+                                                let mut items: Vec<String> = Vec::new();
+                                                if let Some(arr) = v.get("models").and_then(|x| x.as_array()) {
+                                                    for it in arr { if let Some(id) = it.get("id").and_then(|x| x.as_str()) { items.push(id.to_string()); } }
+                                                }
+                                                if items.is_empty() {
+                                                    form.message = Some("No GGUF files discovered. Configure auto_discovery_gguf_paths".to_string());
+                                                } else {
+                                                    let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
+                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: "Select GGUF path".to_string(), target_field: Some(fi) });
+                                                    return;
+                                                }
+                                            }
+                                            Err(e) => { form.message = Some(format!("Discover failed: {}", e)); }
+                                        }
+                                    }
+                                    form.editing = !form.editing;
                             }
                         }
                         // Left/Right: within button group, switch between Test/Save/Cancel. In fields, move cursor when editing.

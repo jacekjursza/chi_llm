@@ -168,6 +168,15 @@ pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<Stri
     let ptype = entry.ptype.as_str();
     if ptype == "local" { return Ok("local: no network test".to_string()); }
     match ptype {
+        "local-custom" => {
+            let path = entry.config.get("model_path").and_then(|v| v.as_str()).unwrap_or("");
+            if path.is_empty() { return Ok("local-custom: missing model_path".to_string()); }
+            if std::path::Path::new(path).exists() {
+                Ok("local-custom: file found".to_string())
+            } else {
+                Ok("local-custom: file not found".to_string())
+            }
+        }
         "lmstudio" => {
             let host = entry.config.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
             let port = entry.config.get("port").and_then(|v| v.as_u64()).unwrap_or(1234);

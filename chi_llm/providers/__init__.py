@@ -21,18 +21,20 @@ def discover_models_for_provider(ptype: str, **kwargs):
     Returns a list of model IDs. Implemented via provider adapters when available.
     """
     p = (ptype or "").strip().lower()
-    if p in ("local", "local-custom"):
-        # Return curated catalog model ids + discovered GGUF file paths
-        ids: List[str] = []
+    if p == "local":
+        # Return curated catalog model ids only (auto-download friendly)
         try:
             from chi_llm.models import MODELS
 
-            ids.extend(list(MODELS.keys()))
+            return list(MODELS.keys())
         except Exception:
-            pass
+            return []
+    if p == "local-custom":
+        # Return only discovered GGUF file paths from configured roots
         try:
             cfg = load_config()
             roots = cfg.get("auto_discovery_gguf_paths") or []
+            ids: List[str] = []
             if isinstance(roots, str):
                 roots = [roots]
             for root in roots:
@@ -42,15 +44,14 @@ def discover_models_for_provider(ptype: str, **kwargs):
                         for pth in rp.rglob("*.gguf"):
                             try:
                                 s = str(pth)
-                                if s not in ids:
-                                    ids.append(s)
+                                ids.append(s)
                             except Exception:
                                 continue
                 except Exception:
                     continue
+            return ids
         except Exception:
-            pass
-        return ids
+            return []
     if p in ("local-zeroconfig", "local-no-config"):
         # Return recommended/default subset for zero-config
         try:
