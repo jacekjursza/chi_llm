@@ -525,10 +525,14 @@ Primary interactive UI is implemented in Rust using `ratatui` + `crossterm` unde
 - Force rebuild: `chi-llm ui --rebuild`
 - Pass-through args: `chi-llm ui -- --no-alt`
 - Sections: `1` Welcome, `2` Configure Provider, `3` (Re)Build Configuration, `4` Diagnostics
-- Keys: `↑/↓` or `k/j` navigate, `enter` select, `b` back, `t` theme, `a` animation, `q` quit, `e` export (Diagnostics)
+- Keys: `↑/↓` or `k/j` navigate, `enter` select, `b` back, `t` theme, `a` animation, `q` quit, `e` export (Diagnostics), `L` logs (Configure tests)
 - (Re)Build: Enter writes project `.chi_llm.json` with minimal provider config
 
 Note: The Python/Textual UI has been removed. The Go UI has been retired.
+
+Provider tests and logs:
+- On Configure page, pressing `L` toggles a logs popup while `providers test --e2e` runs.
+- The TUI sets `--timeout` on the CLI test to accommodate slow initializations (e.g., local-zeroconfig/llama.cpp first load or model download).
 
 #### Discover available models (for UIs and scripts)
 
