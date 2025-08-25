@@ -307,10 +307,20 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             if let Some(dd) = &mut st.dropdown {
                 match key.code {
                     KeyCode::Up => { if dd.selected > 0 { dd.selected -= 1; } }
-                    KeyCode::Down => { if dd.selected + 1 < dd.items.len() { dd.selected += 1; } }
+                    KeyCode::Down => {
+                        // bound by filtered length later during render; keep simple increment
+                        dd.selected = dd.selected.saturating_add(1);
+                    }
                     KeyCode::Enter => {
-                        if dd.selected < dd.items.len() {
-                            let chosen = dd.items[dd.selected].clone();
+                        // Apply selection from filtered list
+                        let filt = dd.filter.to_lowercase();
+                        let mut filtered: Vec<usize> = Vec::new();
+                        for (i, it) in dd.items.iter().enumerate() {
+                            if filt.is_empty() || it.to_lowercase().contains(&filt) { filtered.push(i); }
+                        }
+                        if !filtered.is_empty() {
+                            let sel = if dd.selected >= filtered.len() { filtered.len()-1 } else { dd.selected };
+                            let chosen = dd.items[filtered[sel]].clone();
                             match dd.target_field {
                                 None => {
                                     if st.selected < st.entries.len() {
@@ -335,10 +345,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             }
                         }
                         st.dropdown = None;
-        			return;
+				return;
                     }
                     KeyCode::Esc => { st.dropdown = None; return; }
-                    _ => { return; }
+                    KeyCode::Backspace => { if !dd.filter.is_empty() { let _ = dd.filter.pop(); dd.selected = 0; } return; }
+                    _ => {
+                        if let KeyCode::Char(c) = key.code { if !c.is_control() { dd.filter.push(c); dd.selected = 0; } }
+                        return;
+                    }
                 }
                 return;
             }
@@ -400,7 +414,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             if form.selected == 0 {
                                 let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
                                 let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
-                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None });
+                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new() });
                                 return;
                             }
                             // If on Test/Save/Cancel buttons, act; else toggle edit
@@ -500,7 +514,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                                     form.message = Some(format!("No models discovered for {}", ptype));
                                                 } else {
                                                     let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
-                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select model ({}):", ptype), target_field: Some(fi) });
+                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select model ({}):", ptype), target_field: Some(fi), filter: String::new() });
                                                     return;
                                                 }
                                             }
@@ -511,7 +525,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         let current_val = ff.buffer.clone();
                                         let mut sel = 0usize;
                                         if let Some(i) = items.iter().position(|x| *x == current_val) { sel = i; }
-                                        st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi) });
+                                        st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi), filter: String::new() });
                                         return;
                                     }
                                     } else if ff.schema.name == "model_path" && ptype == "local-custom" {
@@ -527,7 +541,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                                     form.message = Some("No GGUF files discovered. Configure auto_discovery_gguf_paths or type path manually".to_string());
                                                 } else {
                                                     let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
-                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: "Select GGUF path".to_string(), target_field: Some(fi) });
+                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: "Select GGUF path".to_string(), target_field: Some(fi), filter: String::new() });
                                                     return;
                                                 }
                                             }

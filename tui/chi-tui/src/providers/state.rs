@@ -211,4 +211,5 @@ pub struct DropdownState {
     pub selected: usize,
     pub title: String,
     pub target_field: Option<usize>, // None => provider type; Some(i) => form field index
+    pub filter: String,
 }

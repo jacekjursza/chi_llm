@@ -149,17 +149,36 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
     // Overlay dropdown
     if let Some(st) = &app.providers {
         if let Some(dd) = &st.dropdown {
-            let area_pop = centered_rect(50, 60, area);
-            let mut items: Vec<ListItem> = Vec::new();
+            let area_pop = centered_rect(60, 70, area);
+            // Compute filtered indices by simple case-insensitive substring match
+            let filt = dd.filter.to_lowercase();
+            let mut filtered: Vec<usize> = Vec::new();
             for (i, it) in dd.items.iter().enumerate() {
-                let style = if i == dd.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
-                items.push(ListItem::new(Line::from(Span::styled(it.clone(), style))));
+                if filt.is_empty() || it.to_lowercase().contains(&filt) { filtered.push(i); }
             }
+            let mut cons: Vec<Constraint> = Vec::new();
+            cons.push(Constraint::Length(3)); // filter input
+            cons.push(Constraint::Min(3));    // list
+            let chunks = Layout::default().direction(Direction::Vertical).constraints(cons).split(area_pop);
+            // Filter input line
+            let filter_line = format!("Filter: {}", dd.filter);
+            let p = Paragraph::new(filter_line)
+                .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(dd.title.clone()));
+            // List of items
+            let mut items: Vec<ListItem> = Vec::new();
+            for (pos, &idx) in filtered.iter().enumerate() {
+                let it = dd.items[idx].clone();
+                let style = if pos == dd.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
+                items.push(ListItem::new(Line::from(Span::styled(it, style))));
+            }
+            if items.is_empty() { items.push(ListItem::new(Line::from(Span::styled("(no matches)", Style::default().fg(app.theme.secondary))))); }
             let list = List::new(items)
-                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(dd.title.clone()))
+                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)))
                 .highlight_style(Style::default().fg(app.theme.selected));
             f.render_widget(Clear, area_pop);
-            f.render_widget(list, area_pop);
+            f.render_widget(p, chunks[0]);
+            f.render_widget(list, chunks[1]);
         }
     }
 }
