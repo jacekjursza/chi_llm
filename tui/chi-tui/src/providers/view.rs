@@ -168,9 +168,13 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
             // List of items
             let mut items: Vec<ListItem> = Vec::new();
             for (pos, &idx) in filtered.iter().enumerate() {
-                let it = dd.items[idx].clone();
+                let raw = dd.items[idx].clone();
+                let mut label = raw.clone();
+                if let Some(set) = &dd.downloaded {
+                    if set.contains(&raw) { label.push_str("  [downloaded]"); }
+                }
                 let style = if pos == dd.selected { Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD) } else { Style::default().fg(app.theme.fg) };
-                items.push(ListItem::new(Line::from(Span::styled(it, style))));
+                items.push(ListItem::new(Line::from(Span::styled(label, style))));
             }
             if items.is_empty() { items.push(ListItem::new(Line::from(Span::styled("(no matches)", Style::default().fg(app.theme.secondary))))); }
             let list = List::new(items)

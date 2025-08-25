@@ -212,4 +212,5 @@ pub struct DropdownState {
     pub title: String,
     pub target_field: Option<usize>, // None => provider type; Some(i) => form field index
     pub filter: String,
+    pub downloaded: Option<std::collections::HashSet<String>>, // annotate downloaded models
 }

@@ -432,7 +432,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             if form.selected == 0 {
                                 let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
                                 let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
-                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new() });
+                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new(), downloaded: None });
                                 return;
                             }
                             // If on Test/Save/Cancel buttons, act; else toggle/edit field
@@ -532,7 +532,22 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                                     form.message = Some(format!("No models discovered for {}", ptype));
                                                 } else {
                                                     let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
-                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select model ({}):", ptype), target_field: Some(fi), filter: String::new() });
+                                                    // Annotate downloaded for local/local-zeroconfig using models list
+                                                    let mut downloaded: Option<std::collections::HashSet<String>> = None;
+                                                    if ptype == "local" || ptype == "local-zeroconfig" {
+                                                        if let Ok(listv) = util::run_cli_json(&["models", "list", "--json"], Duration::from_secs(3)) {
+                                                            let mut set = std::collections::HashSet::new();
+                                                            if let Some(arr) = listv.as_array() {
+                                                                for m in arr {
+                                                                    if m.get("downloaded").and_then(|x| x.as_bool()).unwrap_or(false) {
+                                                                        if let Some(id) = m.get("id").and_then(|x| x.as_str()) { set.insert(id.to_string()); }
+                                                                    }
+                                                                }
+                                                            }
+                                                            downloaded = Some(set);
+                                                        }
+                                                    }
+                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select model ({}):", ptype), target_field: Some(fi), filter: String::new(), downloaded });
                                                     return;
                                                 }
                                             }
@@ -543,7 +558,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         let current_val = ff.buffer.clone();
                                         let mut sel = 0usize;
                                         if let Some(i) = items.iter().position(|x| *x == current_val) { sel = i; }
-                                        st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi), filter: String::new() });
+                                        st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi), filter: String::new(), downloaded: None });
                                         return;
                                     } else if ff.schema.name == "model_path" && ptype == "local-custom" {
                                         // Discover local GGUF files via CLI (local-custom only)
@@ -558,7 +573,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                                     form.message = Some("No GGUF files discovered. Configure auto_discovery_gguf_paths or type path manually".to_string());
                                                 } else {
                                                     let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
-                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: "Select GGUF path".to_string(), target_field: Some(fi), filter: String::new() });
+                                                    st.dropdown = Some(DropdownState { items, selected: sel, title: "Select GGUF path".to_string(), target_field: Some(fi), filter: String::new(), downloaded: None });
                                                     return;
                                                 }
                                             }
