@@ -1,4 +1,5 @@
 use std::io;
+use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -10,6 +11,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::text::Line;
 use serde_json::Value;
+use std::sync::mpsc::Sender;
 
 use crate::theme::Theme;
 
@@ -97,4 +99,47 @@ pub fn spinner_char(tick: u64) -> char {
         2 => '-',
         _ => '\\',
     }
+}
+
+pub fn run_cli_json_stream(args: &[&str], timeout: Duration, tx_progress: Sender<String>) -> Result<Value> {
+    use wait_timeout::ChildExt;
+    let mut cmd = Command::new("chi-llm");
+    cmd.args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+
+    // Stream stderr lines as progress
+    if let Some(stderr) = child.stderr.take() {
+        let tx = tx_progress.clone();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                if let Ok(l) = line { let _ = tx.send(l); } else { break; }
+            }
+        });
+    }
+
+    // Wait with timeout
+    match child.wait_timeout(timeout)? {
+        Some(_status) => {
+            // proceed to parse stdout regardless of exit code; JSON should be on stdout
+        }
+        None => {
+            let _ = child.kill();
+            let _ = tx_progress.send(format!("Timeout after {:?}", timeout));
+            return Err(anyhow!("chi-llm {:?} timed out after {:?}", args, timeout));
+        }
+    }
+    let mut stdout_str = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        let mut buf = Vec::new();
+        let _ = out.read_to_end(&mut buf);
+        stdout_str = String::from_utf8_lossy(&buf).to_string();
+    }
+    if stdout_str.trim().is_empty() {
+        return Err(anyhow!("empty stdout from chi-llm {:?}", args));
+    }
+    let val: Value = serde_json::from_str(&stdout_str)?;
+    Ok(val)
 }

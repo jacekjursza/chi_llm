@@ -130,11 +130,19 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> R
                             } else {
                                 form.last_test_ok_hash = None;
                                 st.pending_test_hash = None;
+                                // Auto-open logs popup on failure
+                                st.show_test_popup = true;
                             }
                         } else {
                             st.pending_test_hash = None;
                         }
                     }
+                }
+            }
+            // Drain progress logs if any
+            if let Some(prx) = &st.test_progress_rx {
+                while let Ok(line) = prx.try_recv() {
+                    st.test_log.push(line);
                 }
             }
         }
@@ -348,6 +356,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             });
         }
         if let Some(st) = &mut app.providers {
+            // If logs popup is open, only allow closing it with L/Esc
+            if st.show_test_popup {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('l') | KeyCode::Char('L') => { st.show_test_popup = false; }
+                    _ => {}
+                }
+                return;
+            }
             // Dropdown handling (e.g., type selector)
             if let Some(dd) = &mut st.dropdown {
                 match key.code {
@@ -473,16 +489,78 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 if st.selected < st.entries.len() {
                                     let entry = st.entries[st.selected].clone();
                                     let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
+                                    let (txp, rxp) = std::sync::mpsc::channel::<String>();
                                     st.test_result_rx = Some(rx);
                                     st.test_in_progress = true;
                                     let cur_hash = providers::compute_form_hash(&form.fields);
                                     st.pending_test_hash = Some(cur_hash);
-                                    form.message = Some("Testing connection…".to_string());
+                                    st.test_progress_rx = Some(rxp);
+                                    st.test_log.clear();
+                                    // Auto-open logs for local-zeroconfig
+                                    if entry.ptype == "local-zeroconfig" { st.show_test_popup = true; }
+                                    form.message = Some("Testing connection… (L: logs)".to_string());
                                     std::thread::spawn(move || {
-                                        let res = probe_provider(&entry);
+                                        // Build args
+                                        let mut args: Vec<String> = vec!["providers".into(), "test".into(), "--type".into(), entry.ptype.clone(), "--e2e".into(), "--json".into()];
+                                        match entry.ptype.as_str() {
+                                            "local" => {}
+                                            "local-custom" => {
+                                                if let Some(path) = entry.config.get("model_path").and_then(|v| v.as_str()) {
+                                                    args.push("--model-path".into()); args.push(path.into());
+                                                }
+                                            }
+                                            "lmstudio" | "ollama" => {
+                                                if let Some(host) = entry.config.get("host").and_then(|v| v.as_str()) {
+                                                    args.push("--host".into()); args.push(host.into());
+                                                }
+                                                if let Some(port) = entry.config.get("port").and_then(|v| v.as_u64()) {
+                                                    args.push("--port".into()); args.push(port.to_string());
+                                                }
+                                                if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                                                    args.push("--model".into()); args.push(model.into());
+                                                }
+                                            }
+                                            "openai" => {
+                                                if let Some(base) = entry.config.get("base_url").and_then(|v| v.as_str()) {
+                                                    args.push("--base-url".into()); args.push(base.into());
+                                                }
+                                                if let Some(key) = entry.config.get("api_key").and_then(|v| v.as_str()) {
+                                                    args.push("--api-key".into()); args.push(key.into());
+                                                }
+                                                if let Some(org) = entry.config.get("org_id").and_then(|v| v.as_str()) {
+                                                    if !org.is_empty() { args.push("--org-id".into()); args.push(org.into()); }
+                                                }
+                                                if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                                                    args.push("--model".into()); args.push(model.into());
+                                                }
+                                            }
+                                            "anthropic" => {
+                                                if let Some(base) = entry.config.get("base_url").and_then(|v| v.as_str()) {
+                                                    args.push("--base-url".into()); args.push(base.into());
+                                                }
+                                                if let Some(key) = entry.config.get("api_key").and_then(|v| v.as_str()) {
+                                                    args.push("--api-key".into()); args.push(key.into());
+                                                }
+                                                if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                                                    args.push("--model".into()); args.push(model.into());
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        let timeout = if entry.ptype == "local-zeroconfig" { Duration::from_secs(90) } else if entry.ptype == "local" || entry.ptype == "local-custom" { Duration::from_secs(60) } else { Duration::from_secs(30) };
+                                        // Pass timeout through to CLI so inner e2e doesn't early-timeout at 5s
+                                        args.push("--timeout".into()); args.push(format!("{}", timeout.as_secs()));
+                                        let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                                        let res = util::run_cli_json_stream(&args_ref, timeout, txp);
                                         match res {
-                                            Ok(msg) => { let _ = tx.send((true, msg)); },
-                                            Err(e) => { let _ = tx.send((false, e.to_string())); },
+                                            Ok(v) => {
+                                                let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+                                                let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                                                let _ = tx.send((ok, if msg.is_empty() { if ok { "ok".to_string() } else { "failed".to_string() } } else { msg }));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send((false, e.to_string()));
+                                            }
                                         }
                                     });
                                 }
@@ -687,21 +765,83 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 KeyCode::Char('a') | KeyCode::Char('A') => { st.add_default(); ensure_form_for_selected(st); st.focus_right = true; },
                 KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); st.form = None; },
                 KeyCode::Char('m') | KeyCode::Char('M') => { app.page = Page::ModelBrowser; },
+                KeyCode::Char('l') | KeyCode::Char('L') => { if st.test_in_progress || !st.test_log.is_empty() { st.show_test_popup = !st.show_test_popup; } },
                 KeyCode::Char('t') | KeyCode::Char('T') => {
                     if st.test_in_progress { return; }
                     if st.selected < st.entries.len() {
                         let entry = st.entries[st.selected].clone();
                         let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
+                        let (txp, rxp) = std::sync::mpsc::channel::<String>();
                         st.test_result_rx = Some(rx);
+                        st.test_progress_rx = Some(rxp);
                         st.test_in_progress = true;
                         st.test_status = None;
+                        st.test_log.clear();
                         // If we have a form, capture current hash for potential gating feedback
                         if let Some(form) = &st.form { st.pending_test_hash = Some(providers::compute_form_hash(&form.fields)); }
+                        // Auto-open logs for local-zeroconfig
+                        if entry.ptype == "local-zeroconfig" { st.show_test_popup = true; }
                         std::thread::spawn(move || {
-                            let res = probe_provider(&entry);
+                            let mut args: Vec<String> = vec!["providers".into(), "test".into(), "--type".into(), entry.ptype.clone(), "--e2e".into(), "--json".into()];
+                            match entry.ptype.as_str() {
+                                "local" => {}
+                                "local-custom" => {
+                                    if let Some(path) = entry.config.get("model_path").and_then(|v| v.as_str()) {
+                                        args.push("--model-path".into()); args.push(path.into());
+                                    }
+                                }
+                                "lmstudio" | "ollama" => {
+                                    if let Some(host) = entry.config.get("host").and_then(|v| v.as_str()) {
+                                        args.push("--host".into()); args.push(host.into());
+                                    }
+                                    if let Some(port) = entry.config.get("port").and_then(|v| v.as_u64()) {
+                                        args.push("--port".into()); args.push(port.to_string());
+                                    }
+                                    if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                                        args.push("--model".into()); args.push(model.into());
+                                    }
+                                }
+                                "openai" => {
+                                    if let Some(base) = entry.config.get("base_url").and_then(|v| v.as_str()) {
+                                        args.push("--base-url".into()); args.push(base.into());
+                                    }
+                                    if let Some(key) = entry.config.get("api_key").and_then(|v| v.as_str()) {
+                                        args.push("--api-key".into()); args.push(key.into());
+                                    }
+                                    if let Some(org) = entry.config.get("org_id").and_then(|v| v.as_str()) {
+                                        if !org.is_empty() { args.push("--org-id".into()); args.push(org.into()); }
+                                    }
+                                    if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                                        args.push("--model".into()); args.push(model.into());
+                                    }
+                                }
+                                "anthropic" => {
+                                    if let Some(base) = entry.config.get("base_url").and_then(|v| v.as_str()) {
+                                        args.push("--base-url".into()); args.push(base.into());
+                                    }
+                                    if let Some(key) = entry.config.get("api_key").and_then(|v| v.as_str()) {
+                                        args.push("--api-key".into()); args.push(key.into());
+                                    }
+                                    if let Some(model) = entry.config.get("model").and_then(|v| v.as_str()) {
+                                        args.push("--model".into()); args.push(model.into());
+                                    }
+                                }
+                                _ => {}
+                            }
+                            let timeout = if entry.ptype == "local-zeroconfig" { Duration::from_secs(90) } else if entry.ptype == "local" || entry.ptype == "local-custom" { Duration::from_secs(60) } else { Duration::from_secs(30) };
+                            // Pass timeout through to CLI so inner e2e doesn't early-timeout at 5s
+                            args.push("--timeout".into()); args.push(format!("{}", timeout.as_secs()));
+                            let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                            let res = util::run_cli_json_stream(&args_ref, timeout, txp);
                             match res {
-                                Ok(msg) => { let _ = tx.send((true, msg)); },
-                                Err(e) => { let _ = tx.send((false, e.to_string())); },
+                                Ok(v) => {
+                                    let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+                                    let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                                    let _ = tx.send((ok, if msg.is_empty() { if ok { "ok".to_string() } else { "failed".to_string() } } else { msg }));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send((false, e.to_string()));
+                                }
                             }
                         });
                     }

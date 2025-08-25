@@ -172,7 +172,7 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
                     if st.test_in_progress {
                         let spin = spinner_char(app.tick);
                         if msg.is_empty() { msg = "Testing connection…".to_string(); }
-                        msg = format!("{} {}", msg, spin);
+                        msg = format!("{} {}  (L: logs)", msg, spin);
                     }
                     if fields.len() > end { msg = format!("{}  ↓ more…", msg); }
                     if start > 0 { msg = format!("↑ more…  {}", msg); }
@@ -246,6 +246,27 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
             f.render_widget(p, chunks[0]);
             f.render_widget(list, chunks[1]);
         }
+        // Test logs popup overlay
+        if st.show_test_popup {
+            let area_pop = centered_rect(80, 70, area);
+            let mut lines: Vec<Line> = Vec::new();
+            let title = if st.test_in_progress { "Connection Test — Logs (press L/Esc to close)" } else { "Connection Test — Logs (closed with L/Esc)" };
+            if st.test_log.is_empty() {
+                lines.push(Line::from("(no logs yet)"));
+            } else {
+                // Show last ~100 lines
+                let take_n = st.test_log.len().saturating_sub(100);
+                for l in st.test_log.iter().skip(take_n) {
+                    lines.push(Line::from(l.as_str()));
+                }
+            }
+            let p = Paragraph::new(lines)
+                .style(Style::default().bg(app.theme.bg).fg(app.theme.fg))
+                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(app.theme.frame)).title(title))
+                .wrap(Wrap { trim: false });
+            f.render_widget(Clear, area_pop);
+            f.render_widget(p, area_pop);
+        }
     }
 }
 
@@ -300,7 +321,10 @@ pub fn probe_provider(entry: &super::state::ProviderScratchEntry) -> Result<Stri
     }
     // Convert to &str slice for run
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let v = run_cli_json(&args_ref, Duration::from_secs(30))?;
+    // Pass timeout through to CLI to avoid inner 5s default
+    let mut args_with_timeout: Vec<String> = args.iter().cloned().collect();
+    args_with_timeout.push("--timeout".into()); args_with_timeout.push("30".into());
+    let v = run_cli_json(&args_with_timeout.iter().map(|s| s.as_str()).collect::<Vec<&str>>(), Duration::from_secs(30))?;
     let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
     let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string();
     if ok { Ok(msg) } else { Err(anyhow!(msg)) }
