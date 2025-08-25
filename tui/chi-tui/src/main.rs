@@ -23,9 +23,11 @@ mod readme;
 mod models;
 mod providers;
 mod build;
+mod settings;
 
 use app::{App, Page, WELCOME_ITEMS};
 use build::{BuildState, BuildTarget, draw_build_config, write_active_config};
+use settings::draw_settings;
 use diagnostics::{draw_diagnostics, export_diagnostics, fetch_diagnostics};
 use models::{fetch_models, draw_model_browser};
 use providers::{ProvidersState, FormState, DropdownState, load_providers_state, draw_providers_catalog, probe_provider, load_providers_scratch, save_default_provider, draw_select_default};
@@ -131,14 +133,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> R
                                 }
                             }
                             continue;
-                        }
+                        },
                         KeyCode::Char('r') | KeyCode::Char('R') => {
                             match fetch_diagnostics(Duration::from_secs(5)) {
                                 Ok(d) => app.diag = Some(d),
                                 Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
                             }
                             continue;
-                        }
+                        },
                         _ => {}
                     }
                 }
@@ -169,7 +171,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                     Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
                 }
             }
-        }
+        },
         KeyCode::Char('b') | KeyCode::Char('B') => app.page = Page::Build,
         KeyCode::Char('s') | KeyCode::Char('S') => app.page = Page::Settings,
         KeyCode::Esc => {
@@ -193,7 +195,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         Err(e) => app.last_error = Some(format!("Diagnostics failed: {e}")),
                     }
                 }
-            }
+            },
             _ => {}
         }
     }
@@ -239,9 +241,25 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             rm.focus_toc = false; // jump to content focus
                         }
                     }
-                }
+                },
                 _ => {}
             }
+        }
+    }
+
+    // Settings keys
+    if app.page == Page::Settings {
+        match key.code {
+            KeyCode::Up => { if app.settings_idx > 0 { app.settings_idx -= 1; } },
+            KeyCode::Down => { if app.settings_idx < 1 { app.settings_idx += 1; } },
+            KeyCode::Enter => {
+                match app.settings_idx {
+                    0 => app.theme.toggle(),
+                    1 => app.anim = !app.anim,
+                    _ => {}
+                }
+            },
+            _ => {}
         }
     }
 
@@ -263,7 +281,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 KeyCode::Enter => {
                     if let Some(cur) = m.current_entry() { app.selected_model_id = Some(cur.id.clone()); }
                     app.page = Page::Configure; // return to configure with selected model id
-                }
+                },
                 _ => {}
             }
         }
@@ -288,7 +306,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             app.last_error = Some(format!("Save default failed: {e}"));
                         }
                     }
-                }
+                },
                 _ => {}
             }
         }
@@ -306,11 +324,11 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             // Dropdown handling (e.g., type selector)
             if let Some(dd) = &mut st.dropdown {
                 match key.code {
-                    KeyCode::Up => { if dd.selected > 0 { dd.selected -= 1; } }
+                    KeyCode::Up => { if dd.selected > 0 { dd.selected -= 1; } },
                     KeyCode::Down => {
                         // bound by filtered length later during render; keep simple increment
                         dd.selected = dd.selected.saturating_add(1);
-                    }
+                    },
                     KeyCode::Enter => {
                         // Apply selection from filtered list
                         let filt = dd.filter.to_lowercase();
@@ -345,14 +363,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             }
                         }
                         st.dropdown = None;
-				return;
-                    }
-                    KeyCode::Esc => { st.dropdown = None; return; }
-                    KeyCode::Backspace => { if !dd.filter.is_empty() { let _ = dd.filter.pop(); dd.selected = 0; } return; }
+					return;
+                    },
+                    KeyCode::Esc => { st.dropdown = None; return; },
+                    KeyCode::Backspace => { if !dd.filter.is_empty() { let _ = dd.filter.pop(); dd.selected = 0; } return; },
                     _ => {
                         if let KeyCode::Char(c) = key.code { if !c.is_control() { dd.filter.push(c); dd.selected = 0; } }
                         return;
-                    }
+                    },
                 }
                 return;
             }
@@ -383,7 +401,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 if st.form.is_none() && st.selected < st.entries.len() { ensure_form_for_selected(st); }
                 if let Some(form) = &mut st.form {
                     match key.code {
-                        KeyCode::Esc => { if form.editing { form.editing = false; } else { st.focus_right = false; } }
+                        KeyCode::Esc => { if form.editing { form.editing = false; } else { st.focus_right = false; } },
                         // Up/Down navigate between form groups. Treat [Test|Save|Cancel] as one group.
                         KeyCode::Up => {
                             let fields_len = form.fields.len();
@@ -396,7 +414,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             } else if form.selected > 0 {
                                 form.selected -= 1;
                             }
-                        }
+                        },
                         KeyCode::Down => {
                             let fields_len = form.fields.len();
                             let test_idx = fields_len + 1;
@@ -408,8 +426,9 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             } else if form.selected + 1 < total {
                                 form.selected += 1;
                             }
-                        }
+                        },
                         KeyCode::Enter => {
+                            /*
                             // If on Type row: open dropdown
                             if form.selected == 0 {
                                 let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
@@ -417,7 +436,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new() });
                                 return;
                             }
-                            // If on Test/Save/Cancel buttons, act; else toggle edit
+                            // If on Test/Save/Cancel buttons, act; else toggle/edit field
                             let test_idx = form.fields.len() + 1;
                             let save_idx = form.fields.len() + 2;
                             let cancel_idx = form.fields.len() + 3;
@@ -527,7 +546,6 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         if let Some(i) = items.iter().position(|x| *x == current_val) { sel = i; }
                                         st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi), filter: String::new() });
                                         return;
-                                    }
                                     } else if ff.schema.name == "model_path" && ptype == "local-custom" {
                                         // Discover local GGUF files via CLI (local-custom only)
                                         let args = vec!["providers", "discover-models", "--type", "local-custom", "--json"];    
@@ -550,7 +568,17 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                     }
                                     form.editing = !form.editing;
                             }
-                        }
+                            */
+                            // Simplified: open type selector on row 0, else toggle edit
+                            if form.selected == 0 {
+                                let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
+                                let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
+                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new() });
+                                return;
+                            } else {
+                                form.editing = !form.editing;
+                            }
+                        },
                         // Left/Right: within button group, switch between Test/Save/Cancel. In fields, move cursor when editing.
                         KeyCode::Left => {
                             let fields_len = form.fields.len();
@@ -564,7 +592,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                     if ff.cursor > 0 { ff.cursor -= 1; }
                                 }
                             }
-                        }
+                        },
                         KeyCode::Right => {
                             let fields_len = form.fields.len();
                             let test_idx = fields_len + 1;
@@ -577,26 +605,26 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                     if ff.cursor < ff.buffer.chars().count() { ff.cursor += 1; }
                                 }
                             }
-                        }
-                        KeyCode::Home => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = 0; } } }
-                        KeyCode::End => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = ff.buffer.chars().count(); } } }
-                        KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; form.last_test_ok_hash = None; } } } }
-                        KeyCode::Delete => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { let len = ff.buffer.chars().count(); if ff.cursor < len { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; form.last_test_ok_hash = None; } } } }
-                        KeyCode::Tab => { let total = form.fields.len() + 4; form.selected = (form.selected + 1) % total; }
-                        KeyCode::BackTab => { let total = form.fields.len() + 4; form.selected = if form.selected == 0 { total - 1 } else { form.selected - 1 }; }
-                        _ => {}
-                    }
-                    if let KeyCode::Char(c) = key.code {
-                        if form.editing {
-                            if let Some(ff) = form.fields.get_mut(form.selected) {
-                                let mut s = ff.buffer.clone();
-                                let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
-                                s.insert(idx, c);
-                                ff.buffer = s;
-                                ff.cursor += 1;
-                                form.last_test_ok_hash = None;
+                        },
+                        KeyCode::Home => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = 0; } } },
+                        KeyCode::End => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { ff.cursor = ff.buffer.chars().count(); } } },
+                        KeyCode::Backspace => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { if ff.cursor > 0 { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor-1).map(|(i, _)| i).unwrap_or(0); let idx2 = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; ff.cursor -= 1; form.last_test_ok_hash = None; } } } },
+                        KeyCode::Delete => { if form.editing { if let Some(ff) = form.fields.get_mut(form.selected) { let len = ff.buffer.chars().count(); if ff.cursor < len { let mut s = ff.buffer.clone(); let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len()); let idx2 = s.char_indices().nth(ff.cursor+1).map(|(i, _)| i).unwrap_or(s.len()); s.replace_range(idx..idx2, ""); ff.buffer = s; form.last_test_ok_hash = None; } } } },
+                        KeyCode::Tab => { let total = form.fields.len() + 4; form.selected = (form.selected + 1) % total; },
+                        KeyCode::BackTab => { let total = form.fields.len() + 4; form.selected = if form.selected == 0 { total - 1 } else { form.selected - 1 }; },
+                        KeyCode::Char(c) => {
+                            if form.editing {
+                                if let Some(ff) = form.fields.get_mut(form.selected) {
+                                    let mut s = ff.buffer.clone();
+                                    let idx = s.char_indices().nth(ff.cursor).map(|(i, _)| i).unwrap_or(s.len());
+                                    s.insert(idx, c);
+                                    ff.buffer = s;
+                                    ff.cursor += 1;
+                                    form.last_test_ok_hash = None;
+                                }
                             }
-                        }
+                        },
+                        _ => {},
                     }
                 }
                 return;
@@ -615,10 +643,10 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                         ensure_form_for_selected(st);
                         st.focus_right = true;
                     }
-                }
-                KeyCode::Char('a') | KeyCode::Char('A') => { st.add_default(); ensure_form_for_selected(st); st.focus_right = true; }
-                KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); st.form = None; }
-                KeyCode::Char('m') | KeyCode::Char('M') => { app.page = Page::ModelBrowser; }
+                },
+                KeyCode::Char('a') | KeyCode::Char('A') => { st.add_default(); ensure_form_for_selected(st); st.focus_right = true; },
+                KeyCode::Char('d') | KeyCode::Char('D') => { st.delete_selected(); st.form = None; },
+                KeyCode::Char('m') | KeyCode::Char('M') => { app.page = Page::ModelBrowser; },
                 KeyCode::Char('t') | KeyCode::Char('T') => {
                     if st.selected < st.entries.len() {
                         match probe_provider(&st.entries[st.selected]) {
@@ -626,10 +654,10 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             Err(e) => st.test_status = Some(format!("Error: {}", e)),
                         }
                     }
-                }
+                },
                 // Save from left pane
-                KeyCode::Char('s') | KeyCode::Char('S') => { if let Err(e) = st.save() { app.last_error = Some(format!("Save failed: {e}")); } }
-                _ => {}
+                KeyCode::Char('s') | KeyCode::Char('S') => { if let Err(e) = st.save() { app.last_error = Some(format!("Save failed: {e}")); } },
+                _ => {},
             }
             // If a model was picked in model browser, apply to selected provider
             if let Some(model_id) = app.selected_model_id.take() {
@@ -645,14 +673,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         }
         if let Some(st) = &mut app.build {
             match key.code {
-                KeyCode::Char('g') | KeyCode::Char('G') => { st.toggle_target(); }
+                KeyCode::Char('g') | KeyCode::Char('G') => { st.toggle_target(); },
                 KeyCode::Enter => {
                     match write_active_config(st.target) {
                         Ok(path) => st.status = Some(format!("Written: {}", path)),
                         Err(e) => st.status = Some(format!("Error: {}", e)),
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
     }
@@ -676,7 +704,7 @@ fn ui(f: &mut Frame, app: &App) {
         Page::ModelBrowser => draw_model_browser(f, chunks[1], app),
         Page::Diagnostics => draw_diagnostics(f, chunks[1], app),
         Page::Build => draw_build_config(f, chunks[1], app),
-        Page::Settings => draw_stub(f, chunks[1], app, "Settings (stub) — t/a toggles"),
+        Page::Settings => draw_settings(f, chunks[1], app),
     }
     draw_footer(f, chunks[2], app);
 

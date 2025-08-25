@@ -24,6 +24,7 @@ pub struct App {
     pub menu_idx: usize,
     pub show_help: bool,
     pub anim: bool,
+    pub settings_idx: usize,
     pub tick: u64,
     pub last_tick: Instant,
     pub theme: Theme,
@@ -46,6 +47,7 @@ impl App {
             menu_idx: 0,
             show_help: false,
             anim: true,
+            settings_idx: 0,
             tick: 0,
             last_tick: Instant::now(),
             theme: Theme::synthwave_dark(),
@@ -73,4 +75,3 @@ pub const WELCOME_ITEMS: &[(&str, Page)] = &[
     ("Model Browser", Page::ModelBrowser),
     ("EXIT", Page::Welcome),
 ];
-
