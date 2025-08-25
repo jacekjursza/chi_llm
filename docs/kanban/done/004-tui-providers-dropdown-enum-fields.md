@@ -3,7 +3,7 @@
 Meta
 - Type: Task
 - Priority: P2
-- Status: In Progress
+- Status: Done
 
 ## Summary (What)
 - Add a proper dropdown selector widget for provider “Type” (already partially implemented) and extend it to any schema field that declares an enum of allowed values.
@@ -18,6 +18,11 @@ Meta
 - Keep keyboard map consistent with Type selector; mouse support optional/non-goal.
 
 ## Acceptance Criteria
-- Pressing Enter on a field with enum/options opens a dropdown and updates the field upon selection.
-- Dropdown is navigable via Up/Down/Enter/Esc and respects current theme.
-- No regressions to existing Type dropdown and Save/Cancel flow.
+- Pressing Enter on a field with enum/options opens a dropdown and updates the field upon selection. (Implemented)
+- Dropdown is navigable via Up/Down/Enter/Esc and respects current theme. (Implemented)
+- No regressions to existing Type dropdown and Save/Cancel flow. (Verified)
+
+## Notes
+- Provider “Type” row opens a dropdown with available provider types.
+- Fields with `options`/`enum`/`choices` in schema open a dropdown overlay and write back selected value.
+- Special case: `model` field for `lmstudio` and `ollama` triggers dynamic model discovery via CLI and presents the results as a dropdown.
