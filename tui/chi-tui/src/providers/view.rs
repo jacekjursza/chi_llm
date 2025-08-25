@@ -49,6 +49,12 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
 
     // Right form panel
     let right = cols[1];
+    // Draw an outer border around the right pane to indicate active focus (draw first to avoid overlapping content)
+    if let Some(st) = &app.providers {
+        let right_border = if st.focus_right { app.theme.selected } else { app.theme.frame };
+        let outer = Block::default().borders(Borders::ALL).border_style(Style::default().fg(right_border));
+        f.render_widget(outer, right);
+    }
     let mut title = "Provider Details".to_string();
     if let Some(st) = &app.providers {
         if st.selected < st.entries.len() {
@@ -139,12 +145,7 @@ pub fn draw_providers_catalog(f: &mut Frame, area: Rect, app: &App) {
         f.render_widget(p, right);
     }
 
-    // Draw an outer border around the right pane to indicate active focus
-    if let Some(st) = &app.providers {
-        let right_border = if st.focus_right { app.theme.selected } else { app.theme.frame };
-        let outer = Block::default().borders(Borders::ALL).border_style(Style::default().fg(right_border));
-        f.render_widget(outer, right);
-    }
+    // (outer border drawn earlier)
 
     // Overlay dropdown
     if let Some(st) = &app.providers {
