@@ -428,7 +428,6 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             }
                         },
                         KeyCode::Enter => {
-                            /*
                             // If on Type row: open dropdown
                             if form.selected == 0 {
                                 let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
@@ -567,16 +566,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                         }
                                     }
                                     form.editing = !form.editing;
-                            }
-                            */
-                            // Simplified: open type selector on row 0, else toggle edit
-                            if form.selected == 0 {
-                                let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
-                                let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
-                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None, filter: String::new() });
-                                return;
-                            } else {
-                                form.editing = !form.editing;
+                                }
                             }
                         },
                         // Left/Right: within button group, switch between Test/Save/Cancel. In fields, move cursor when editing.
