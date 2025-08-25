@@ -19,5 +19,18 @@ cargo run -- --no-alt  # start without switching to alternate screen
 - Pages scaffolded: Welcome, README, Configure, Select Default, Model Browser, Diagnostics, Build, Settings.
 - Retro/Synthwave theme palette (neon magenta/cyan/blue) with dark background.
 
+### Local providers UX
+
+- `local` / `local-zeroconfig`:
+  - Field `model` supports a dropdown (Enter) with curated catalog IDs.
+  - Models auto-download on demand; download status does not block selection.
+  - Use `providers discover-models --type local` for the same list via CLI.
+
+- `local-custom`:
+  - Field `model_path` supports a dropdown (Enter) with discovered `.gguf` files.
+  - Discovery roots come from `auto_discovery_gguf_paths` in config (recursive scan).
+  - If no files are discovered, a hint is shown; you can also type the path manually.
+  - Use `providers discover-models --type local-custom` for the same list via CLI.
+
 ## License
 MIT

@@ -524,7 +524,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                                     for it in arr { if let Some(id) = it.get("id").and_then(|x| x.as_str()) { items.push(id.to_string()); } }
                                                 }
                                                 if items.is_empty() {
-                                                    form.message = Some("No GGUF files discovered. Configure auto_discovery_gguf_paths".to_string());
+                                                    form.message = Some("No GGUF files discovered. Configure auto_discovery_gguf_paths or type path manually".to_string());
                                                 } else {
                                                     let sel = items.iter().position(|x| *x == ff.buffer).unwrap_or(0);
                                                     st.dropdown = Some(DropdownState { items, selected: sel, title: "Select GGUF path".to_string(), target_field: Some(fi) });
