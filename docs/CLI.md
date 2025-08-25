@@ -257,10 +257,23 @@ chi-llm providers set ollama --host 127.0.0.1 --port 11434 --model llama3.2:late
 ```
 
 Notes:
-- Supported now: `local`, `lmstudio`, `ollama`, `openai`, `anthropic`, `claude-cli`, `openai-cli`. Others (`groq`, `gemini`) are placeholders.
-- `providers schema` exposes field schemas per type (name, type, required, default) for UIs and automation.
+- Supported now: `local`, `local-zeroconfig`, `local-custom`, `lmstudio`, `ollama`, `openai`, `anthropic`, `claude-cli`, `openai-cli`. Others (`groq`, `gemini`) are placeholders.
+- `providers schema` exposes field schemas per type (name, type, required, default). Some fields may include `options` (or `enum`/`choices`) to indicate dropdown candidates for UIs.
 - Settings are written under the `provider` key in `.chi_llm.json` (local) or the global config.
 - For routing across multiple providers, define `provider_profiles` in your config and set `llm.tags` in code; see `docs/configuration.md`.
+
+Local providers split:
+
+```bash
+# Zero‑config curated models: pick a model ID, chi‑llm downloads if needed
+chi-llm providers set local-zeroconfig --model qwen3-1.7b --local
+
+# Custom local model: direct GGUF path and optional tuning
+chi-llm providers set local-custom --model-path /abs/path/to/model.gguf \
+  --context-window 32768 --n-gpu-layers 0 --output-tokens 2048 --local
+
+# Backward‑compat: `local` remains as a legacy alias
+```
 
 ### 🩺 `diagnostics` - Environment checks
 

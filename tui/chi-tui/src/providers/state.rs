@@ -121,9 +121,18 @@ pub fn load_providers_state() -> Result<ProvidersState> {
                         let required = f.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
                         let default = if let Some(d) = f.get("default") { Some(d.to_string().trim_matches('"').to_string()) } else { None };
                         let help = f.get("help").and_then(|v| v.as_str()).map(|s| s.to_string());
-                        let options = f.get("options").and_then(|v| v.as_array()).map(|arr| {
-                            arr.iter().filter_map(|it| it.as_str().map(|s| s.to_string())).collect::<Vec<String>>()
-                        });
+                        // Collect enum-like options for dropdowns from common keys
+                        let mut opts: Vec<String> = Vec::new();
+                        for key in ["options", "enum", "choices"].iter() {
+                            if let Some(arr) = f.get(*key).and_then(|v| v.as_array()) {
+                                for it in arr.iter() {
+                                    if let Some(s) = it.as_str() {
+                                        if !opts.contains(&s.to_string()) { opts.push(s.to_string()); }
+                                    }
+                                }
+                            }
+                        }
+                        let options = if opts.is_empty() { None } else { Some(opts) };
                         fields.push(FieldSchema { name, ftype, required, default, help, options });
                     }
                 }
