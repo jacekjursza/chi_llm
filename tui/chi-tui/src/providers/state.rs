@@ -121,7 +121,10 @@ pub fn load_providers_state() -> Result<ProvidersState> {
                         let required = f.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
                         let default = if let Some(d) = f.get("default") { Some(d.to_string().trim_matches('"').to_string()) } else { None };
                         let help = f.get("help").and_then(|v| v.as_str()).map(|s| s.to_string());
-                        fields.push(FieldSchema { name, ftype, required, default, help });
+                        let options = f.get("options").and_then(|v| v.as_array()).map(|arr| {
+                            arr.iter().filter_map(|it| it.as_str().map(|s| s.to_string())).collect::<Vec<String>>()
+                        });
+                        fields.push(FieldSchema { name, ftype, required, default, help, options });
                     }
                 }
                 schema_map.insert(ptype.to_string(), fields);
@@ -165,6 +168,7 @@ pub struct FieldSchema {
     pub required: bool,
     pub default: Option<String>,
     pub help: Option<String>,
+    pub options: Option<Vec<String>>, // optional enum-like options for dropdowns
 }
 
 #[derive(Clone, Debug)]
@@ -184,4 +188,5 @@ pub struct DropdownState {
     pub items: Vec<String>,
     pub selected: usize,
     pub title: String,
+    pub target_field: Option<usize>, // None => provider type; Some(i) => form field index
 }

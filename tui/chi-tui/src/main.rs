@@ -45,7 +45,7 @@ fn ensure_form_for_selected(st: &mut ProvidersState) {
                 }
             }
             if value.is_empty() { if let Some(d) = &sc.default { value = d.clone(); } }
-            ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone() }, buffer: value, cursor: 0 });
+            ff.push(providers::FormField { schema: providers::FieldSchema { name: sc.name.clone(), ftype: sc.ftype.clone(), required: sc.required, default: sc.default.clone(), help: sc.help.clone(), options: sc.options.clone() }, buffer: value, cursor: 0 });
         }
     }
     st.form = Some(FormState { fields: ff, selected: 0, editing: false, message: None, scroll: 0 });
@@ -278,18 +278,33 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                     KeyCode::Up => { if dd.selected > 0 { dd.selected -= 1; } }
                     KeyCode::Down => { if dd.selected + 1 < dd.items.len() { dd.selected += 1; } }
                     KeyCode::Enter => {
-                        if st.selected < st.entries.len() && dd.selected < dd.items.len() {
+                        if dd.selected < dd.items.len() {
                             let chosen = dd.items[dd.selected].clone();
-                            st.entries[st.selected].ptype = chosen.clone();
-                            ensure_form_for_selected(st);
-                            if let Some(form) = &mut st.form {
-                                form.selected = 1.min(form.fields.len());
-                                form.editing = false;
-                                form.message = Some("Type changed".to_string());
+                            match dd.target_field {
+                                None => {
+                                    if st.selected < st.entries.len() {
+                                        st.entries[st.selected].ptype = chosen.clone();
+                                        ensure_form_for_selected(st);
+                                        if let Some(form) = &mut st.form {
+                                            form.selected = 1.min(form.fields.len());
+                                            form.editing = false;
+                                            form.message = Some("Type changed".to_string());
+                                        }
+                                    }
+                                }
+                                Some(fi) => {
+                                    if let Some(form) = &mut st.form {
+                                        if fi < form.fields.len() {
+                                            form.fields[fi].buffer = chosen.clone();
+                                            form.editing = false;
+                                            form.message = Some(format!("{} set", form.fields[fi].schema.name));
+                                        }
+                                    }
+                                }
                             }
                         }
                         st.dropdown = None;
-                		return;
+        			return;
                     }
                     KeyCode::Esc => { st.dropdown = None; return; }
                     _ => { return; }
@@ -318,7 +333,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                             if form.selected == 0 {
                                 let current = st.entries.get(st.selected).map(|e| e.ptype.clone()).unwrap_or_default();
                                 let idx = st.schema_types.iter().position(|t| *t == current).unwrap_or(0);
-                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string() });
+                                st.dropdown = Some(DropdownState { items: st.schema_types.clone(), selected: idx, title: "Select Provider Type".to_string(), target_field: None });
                                 return;
                             }
                             // If on Save/Cancel buttons, act; else toggle edit
@@ -349,6 +364,18 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                                 form.editing = false;
                                 st.focus_right = false;
                             } else {
+                                // If field has options, open dropdown, else toggle edit
+                                let fi = form.selected - 1; // map to fields index
+                                if let Some(ff) = form.fields.get(fi) {
+                                    if let Some(opts) = &ff.schema.options {
+                                        let mut items = opts.clone();
+                                        let current_val = ff.buffer.clone();
+                                        let mut sel = 0usize;
+                                        if let Some(i) = items.iter().position(|x| *x == current_val) { sel = i; }
+                                        st.dropdown = Some(DropdownState { items, selected: sel, title: format!("Select {}", ff.schema.name), target_field: Some(fi) });
+                                        return;
+                                    }
+                                }
                                 form.editing = !form.editing;
                             }
                         }
